@@ -254,6 +254,9 @@ const ActivationRequest = sequelize.define('ActivationRequest', {
   chargedAmount: { type: DataTypes.DECIMAL(10, 2), allowNull: false, defaultValue: 0 },
   decidedAt: { type: DataTypes.DATE, allowNull: true },
   activatedAt: { type: DataTypes.DATE, allowNull: true },
+  delayHours: { type: DataTypes.INTEGER, allowNull: true },
+  delayedUntil: { type: DataTypes.DATE, allowNull: true },
+  delayReason: { type: DataTypes.TEXT, allowNull: true },
   notes: { type: DataTypes.TEXT, allowNull: true }
 }, {
   indexes: [
@@ -1307,6 +1310,82 @@ Object.assign(DEFAULT_TEXTS.ar, {
 });
 
 Object.assign(DEFAULT_TEXTS.en, {
+  inviteModeOn: '🎟 Invitation mode: ON',
+  inviteModeOff: '📦 Stock mode: ON',
+  switchToInviteMode: '🔄 Convert from stock to invitation',
+  switchToStockMode: '🔄 Convert from invitation to stock',
+  inviteGuideSettings: '📝 Invitation guide / video / photo',
+  inviteGuideCurrent: 'Current guide: {type}',
+  inviteGuideEmpty: 'No invitation guide was added yet.',
+  inviteGuideTextType: 'Text',
+  inviteGuidePhotoType: 'Photo',
+  inviteGuideVideoType: 'Video',
+  askInviteGuideContent: 'Send the invitation guide now as text, photo, or video. Send /empty to clear it.',
+  inviteGuideUpdated: '✅ Invitation guide updated.',
+  inviteGuideCleared: '✅ Invitation guide removed.',
+  activationProcessingSoon: '✅ Your order has been received.\n\nService: {service}\nEmail: {email}\nAmount: {amount} USD\nTime: {time}\n\nYour request will be activated soon and pinned for admin follow-up.',
+  activationSentGuideUser: '📩 The invitation has been sent. Please check your email and follow the steps below:',
+  activationDelay: '⏳ Delay',
+  activationDelayChoose: 'Choose the delay duration:',
+  activationDelay1: '1 hour',
+  activationDelay2: '2 hours',
+  activationDelay3: '3 hours',
+  activationDelay4: '4 hours',
+  activationDelayedUser: '⏳ Activation was delayed for {hours} hour(s) because there is a temporary system issue.\n\nDo you agree to wait?',
+  activationDelayAccepted: '✅ Thank you. Please wait for the selected time and the admin will complete the activation.',
+  activationDelayDeclined: '❌ You chose not to wait. You can contact support directly from the buttons below.',
+  activationAcceptDelay: '✅ Agree',
+  activationDeclineDelay: '❌ Refuse',
+  activationDelayAppliedAdmin: 'Delay offer sent to the customer.',
+  activationDelayUserAcceptedAdmin: '✅ Customer accepted the delay.',
+  activationDelayUserDeclinedAdmin: '❌ Customer refused the delay.',
+  activationRequestAdminBodyHtml: 'Service: <b>{service}</b>\nUser: {name}\nUsername: {username}\nUser ID: <code>{userId}</code>\nEmail: <code>{email}</code>\nAmount: <b>{amount} USD</b>\nTime: <b>{time}</b>',
+  activationSendInviteDone: '✅ Invitation sent',
+  activationRejectShort: '❌ Reject',
+  activationDelayShort: '⏳ Delay',
+  inviteSupportTitle: 'Support buttons for this invite product',
+  onDemandStock: 'On demand'
+});
+
+Object.assign(DEFAULT_TEXTS.ar, {
+  inviteModeOn: '🎟 وضع الدعوة: مفعل',
+  inviteModeOff: '📦 وضع المخزون: مفعل',
+  switchToInviteMode: '🔄 تحويله من مخزون إلى دعوة',
+  switchToStockMode: '🔄 تحويله من دعوة إلى مخزون',
+  inviteGuideSettings: '📝 كتابة شرح / فيديو / نص / صورة',
+  inviteGuideCurrent: 'الشرح الحالي: {type}',
+  inviteGuideEmpty: 'لا يوجد شرح مضاف لهذه الدعوة حتى الآن.',
+  inviteGuideTextType: 'نص',
+  inviteGuidePhotoType: 'صورة',
+  inviteGuideVideoType: 'فيديو',
+  askInviteGuideContent: 'أرسل الآن شرح الدعوة كنص أو صورة أو فيديو. أرسل /empty للحذف.',
+  inviteGuideUpdated: '✅ تم تحديث شرح الدعوة.',
+  inviteGuideCleared: '✅ تم حذف شرح الدعوة.',
+  activationProcessingSoon: '✅ تم استلام طلبك.\n\nالخدمة: {service}\nالإيميل: {email}\nالمبلغ: {amount} دولار\nالوقت: {time}\n\nسيتم التفعيل قريباً ويتم تثبيت الطلب لمتابعته من الأدمن.',
+  activationSentGuideUser: '📩 تم إرسال الدعوة. يرجى الدخول إلى البريد الإلكتروني واتباع الخطوات التالية:',
+  activationDelay: '⏳ تأجيل',
+  activationDelayChoose: 'اختر مدة التأجيل:',
+  activationDelay1: '1 ساعة',
+  activationDelay2: '2 ساعة',
+  activationDelay3: '3 ساعة',
+  activationDelay4: '4 ساعة',
+  activationDelayedUser: '⏳ تم تأجيل التفعيل لمدة {hours} ساعة بسبب وجود مشكلة مؤقتة في النظام.\n\nهل توافق على الانتظار؟',
+  activationDelayAccepted: '✅ شكرًا لك. يرجى الانتظار حسب الوقت المحدد وسيكمل الأدمن التفعيل.',
+  activationDelayDeclined: '❌ تم رفض الانتظار. يمكنك التواصل مباشرة مع الدعم من الأزرار أدناه.',
+  activationAcceptDelay: '✅ موافقة',
+  activationDeclineDelay: '❌ رفض',
+  activationDelayAppliedAdmin: 'تم إرسال عرض التأجيل إلى الزبون.',
+  activationDelayUserAcceptedAdmin: '✅ وافق الزبون على التأجيل.',
+  activationDelayUserDeclinedAdmin: '❌ رفض الزبون التأجيل.',
+  activationRequestAdminBodyHtml: 'الخدمة: <b>{service}</b>\nالاسم: {name}\nالمعرف: {username}\nايدي المستخدم: <code>{userId}</code>\nالإيميل: <code>{email}</code>\nالمبلغ: <b>{amount} دولار</b>\nالوقت: <b>{time}</b>',
+  activationSendInviteDone: '✅ تم إرسال الدعوة',
+  activationRejectShort: '❌ رفض',
+  activationDelayShort: '⏳ تأجيل',
+  inviteSupportTitle: 'أزرار التواصل الخاصة بهذا المنتج الدعوي',
+  onDemandStock: 'حسب الطلب'
+});
+
+Object.assign(DEFAULT_TEXTS.en, {
   chooseDepositMethodType: '⚡ Choose the payment method for deposit:',
   chooseDepositAmountForMethod: '⚡ Choose the deposit amount via {method}:',
   depositMethodInstructionsUSD: '⚡ <b>Deposit via {method}</b>\n\n💵 Amount: <b>{amountUSD}$</b>\n📌 Payment details:\n<code>{details}</code>\n🕒 Order time: <b>{time}</b>\n\nAfter paying, press the Done button below.',
@@ -1492,6 +1571,17 @@ async function safeDeleteChatMessage(chatId, messageId) {
   if (!chatId || !messageId) return false;
   try {
     await bot.deleteMessage(chatId, messageId);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+
+async function safePinChatMessage(chatId, messageId) {
+  if (!chatId || !messageId) return false;
+  try {
+    await bot.pinChatMessage(chatId, messageId, { disable_notification: true });
     return true;
   } catch {
     return false;
@@ -2551,6 +2641,7 @@ async function showDigitalProductSupportAdmin(userId, merchantId) {
   }
   const contacts = getMerchantSupportContacts(merchant);
   const lines = [
+    await getText(userId, 'inviteSupportTitle'),
     await getText(userId, 'supportSettingsTitle', { name: `${merchant.nameEn} / ${merchant.nameAr}` }),
     await getText(userId, 'currentSupportTelegram', { value: contacts.telegram || '-' }),
     await getText(userId, 'currentSupportWhatsapp', { value: contacts.whatsapp || '-' }),
@@ -2950,21 +3041,29 @@ async function showDigitalProductAdmin(userId, merchantId) {
     : await getText(userId, 'typeSingle');
   const description = await getMerchantAdminDescriptionSummary(userId, merchant);
   const placementText = await getMerchantPlacementText(userId, merchant);
+  const meta = getMerchantMetaConfig(merchant);
+  const inviteMode = Boolean(meta.inviteMode || meta.requiresEmailActivation);
+  const guide = getMerchantInviteGuideConfig(merchant);
+  const guideTypeLabel = guide.type ? getInviteGuideTypeLabel(userId === ADMIN_ID ? ((await User.findByPk(userId))?.lang || 'en') : 'en', guide.type) : await getText(userId, 'inviteGuideEmpty');
 
   await bot.sendMessage(
     userId,
     `${await getText(userId, 'digitalProductManageText', {
       name: `${merchant.nameEn} / ${merchant.nameAr}`,
       price: formatUsdPrice(merchant.price),
-      stock,
+      stock: inviteMode ? await getText(userId, 'onDemandStock') : stock,
       type: typeText,
       createdAt: formatAdminDateTime(merchant.createdAt),
       description
     })}
-${await getText(userId, 'digitalProductPlacementLine', { location: placementText })}`,
+${await getText(userId, 'digitalProductPlacementLine', { location: placementText })}
+${await getText(userId, inviteMode ? 'inviteModeOn' : 'inviteModeOff')}
+${await getText(userId, 'inviteGuideCurrent', { type: guideTypeLabel })}`,
     {
       reply_markup: {
         inline_keyboard: [
+          [{ text: await getText(userId, inviteMode ? 'switchToStockMode' : 'switchToInviteMode'), callback_data: `admin_toggle_product_invite_${merchant.id}` }],
+          [{ text: await getText(userId, 'inviteGuideSettings'), callback_data: `admin_product_invite_guide_${merchant.id}` }],
           [{ text: await getText(userId, 'moveDigitalProductToMainMenu'), callback_data: `admin_move_product_to_main_${merchant.id}` }],
           [{ text: await getText(userId, 'moveDigitalProductToSection'), callback_data: `admin_choose_product_target_${merchant.id}` }],
           [{ text: await getText(userId, 'addDigitalProductStock'), callback_data: `admin_digital_add_stock_${merchant.id}` }],
@@ -3006,12 +3105,13 @@ ${await getText(userId, 'digitalSectionEmpty')}`, {
   const buttons = [];
   for (const product of products) {
     const stock = await getMerchantAvailableStock(product.id);
+    const stockLabel = (await isEmailActivationProduct(product)) ? await getText(userId, 'onDemandStock') : stock;
     const name = await getMerchantDisplayName(product, userId);
     buttons.push([{
       text: await getText(userId, 'digitalProductListButton', {
         name,
         price: formatUsdPrice(product.price),
-        stock
+        stock: stockLabel
       }),
       callback_data: `digital_product_${product.id}`
     }]);
@@ -3043,6 +3143,8 @@ async function showDigitalProductDetails(userId, merchantId) {
     return;
   }
   const stock = await getMerchantAvailableStock(merchant.id);
+  const inviteModeForUser = await isEmailActivationProduct(merchant);
+  const stockLabel = inviteModeForUser ? await getText(userId, 'onDemandStock') : stock;
   const name = await getMerchantDisplayName(merchant, userId);
   let details = await getMerchantDescriptionForUser(userId, merchant);
 
@@ -3071,7 +3173,7 @@ async function showDigitalProductDetails(userId, merchantId) {
     userId,
     `${await getText(userId, 'digitalProductDetailsText', {
       name,
-      stock,
+      stock: stockLabel,
       price: formatUsdPrice(merchant.price),
       details
     })}
@@ -7698,6 +7800,7 @@ async function sendMainMenu(userId) {
 
   for (const product of mainMenuProducts) {
     const stock = await getMerchantAvailableStock(product.id);
+    const stockLabel = (await isEmailActivationProduct(product)) ? await getText(userId, 'onDemandStock') : stock;
     const name = await getMerchantDisplayName(product, userId);
     buttons.push([{
       text: await getText(userId, 'digitalProductListButton', {
@@ -8921,17 +9024,96 @@ bot.on('callback_query', async query => {
       const merchantId = parseInt(activationApproveMatch[1], 10);
       const targetUserId = parseInt(activationApproveMatch[2], 10);
       const merchant = await Merchant.findByPk(merchantId);
-      const request = await ActivationRequest.findOne({ where: { merchantId, userId: targetUserId, status: 'pending' }, order: [['id', 'DESC']] });
+      const request = await ActivationRequest.findOne({ where: { merchantId, userId: targetUserId, status: { [Op.in]: ['pending', 'delayed_offered', 'delayed_accepted'] } }, order: [['id', 'DESC']] });
       if (merchant && request) {
         request.status = 'activated';
         request.activatedAt = new Date();
         request.decidedAt = new Date();
         await request.save();
         await bot.sendMessage(targetUserId, await getText(targetUserId, 'activationDoneUser', { service: await getMerchantDisplayName(merchant, targetUserId), email: request.email }), { reply_markup: { inline_keyboard: [[{ text: await getText(targetUserId, 'back'), callback_data: 'back_to_menu' }]] } });
+        await sendInviteGuideToUser(targetUserId, merchant);
         await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'activationApprove') });
       } else {
         await bot.answerCallbackQuery(query.id, { text: 'Not found' });
       }
+      return;
+    }
+
+    const activationDelayPickMatch = data.match(/^activation_delaypick_(\d+)_(\d+)$/);
+    if (activationDelayPickMatch && isAdmin(userId)) {
+      const merchantId = parseInt(activationDelayPickMatch[1], 10);
+      const targetUserId = parseInt(activationDelayPickMatch[2], 10);
+      await bot.sendMessage(userId, await getText(userId, 'activationDelayChoose'), {
+        reply_markup: await getActivationDelaySelectionMarkup(merchantId, targetUserId)
+      });
+      await bot.answerCallbackQuery(query.id);
+      return;
+    }
+
+    const activationDelayMatch = data.match(/^activation_delay_(\d+)_(\d+)_(\d+)$/);
+    if (activationDelayMatch && isAdmin(userId)) {
+      const merchantId = parseInt(activationDelayMatch[1], 10);
+      const targetUserId = parseInt(activationDelayMatch[2], 10);
+      const hours = parseInt(activationDelayMatch[3], 10) || 1;
+      const merchant = await Merchant.findByPk(merchantId);
+      const request = await ActivationRequest.findOne({ where: { merchantId, userId: targetUserId, status: { [Op.in]: ['pending', 'delayed_offered', 'delayed_accepted'] } }, order: [['id', 'DESC']] });
+      if (merchant && request) {
+        request.status = 'delayed_offered';
+        request.delayHours = hours;
+        request.delayedUntil = new Date(Date.now() + hours * 60 * 60 * 1000);
+        request.delayReason = 'system_issue';
+        request.decidedAt = new Date();
+        await request.save();
+        await bot.sendMessage(targetUserId, await getText(targetUserId, 'activationDelayedUser', { hours }), {
+          reply_markup: { inline_keyboard: [
+            [{ text: await getText(targetUserId, 'activationAcceptDelay'), callback_data: `activation_delay_accept_${merchantId}_${targetUserId}` }],
+            [{ text: await getText(targetUserId, 'activationDeclineDelay'), callback_data: `activation_delay_decline_${merchantId}_${targetUserId}` }]
+          ] }
+        });
+        await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'activationDelayAppliedAdmin') });
+      } else {
+        await bot.answerCallbackQuery(query.id, { text: 'Not found' });
+      }
+      return;
+    }
+
+    const activationDelayAcceptMatch = data.match(/^activation_delay_accept_(\d+)_(\d+)$/);
+    if (activationDelayAcceptMatch) {
+      const merchantId = parseInt(activationDelayAcceptMatch[1], 10);
+      const targetUserId = parseInt(activationDelayAcceptMatch[2], 10);
+      if (Number(userId) !== targetUserId) {
+        await bot.answerCallbackQuery(query.id);
+        return;
+      }
+      const merchant = await Merchant.findByPk(merchantId);
+      const request = await ActivationRequest.findOne({ where: { merchantId, userId: targetUserId, status: 'delayed_offered' }, order: [['id', 'DESC']] });
+      if (merchant && request) {
+        request.status = 'delayed_accepted';
+        await request.save();
+        await bot.sendMessage(targetUserId, await getText(targetUserId, 'activationDelayAccepted'), { reply_markup: { inline_keyboard: [[{ text: await getText(targetUserId, 'back'), callback_data: 'back_to_menu' }]] } });
+        await bot.sendMessage(ADMIN_ID, await getText(ADMIN_ID, 'activationDelayUserAcceptedAdmin'));
+      }
+      await bot.answerCallbackQuery(query.id);
+      return;
+    }
+
+    const activationDelayDeclineMatch = data.match(/^activation_delay_decline_(\d+)_(\d+)$/);
+    if (activationDelayDeclineMatch) {
+      const merchantId = parseInt(activationDelayDeclineMatch[1], 10);
+      const targetUserId = parseInt(activationDelayDeclineMatch[2], 10);
+      if (Number(userId) !== targetUserId) {
+        await bot.answerCallbackQuery(query.id);
+        return;
+      }
+      const merchant = await Merchant.findByPk(merchantId);
+      const request = await ActivationRequest.findOne({ where: { merchantId, userId: targetUserId, status: 'delayed_offered' }, order: [['id', 'DESC']] });
+      if (merchant && request) {
+        request.status = 'delayed_declined';
+        await request.save();
+        await bot.sendMessage(targetUserId, await getText(targetUserId, 'activationDelayDeclined'), { reply_markup: await getActivationSupportReplyMarkup(targetUserId, merchant) });
+        await bot.sendMessage(ADMIN_ID, await getText(ADMIN_ID, 'activationDelayUserDeclinedAdmin'));
+      }
+      await bot.answerCallbackQuery(query.id);
       return;
     }
 
@@ -8940,7 +9122,7 @@ bot.on('callback_query', async query => {
       const merchantId = parseInt(activationRejectMatch[1], 10);
       const targetUserId = parseInt(activationRejectMatch[2], 10);
       const merchant = await Merchant.findByPk(merchantId);
-      const request = await ActivationRequest.findOne({ where: { merchantId, userId: targetUserId, status: 'pending' }, order: [['id', 'DESC']] });
+      const request = await ActivationRequest.findOne({ where: { merchantId, userId: targetUserId, status: { [Op.in]: ['pending', 'delayed_offered', 'delayed_accepted'] } }, order: [['id', 'DESC']] });
       if (merchant && request) {
         request.status = 'not_activated';
         request.decidedAt = new Date();
@@ -10254,6 +10436,33 @@ bot.on('callback_query', async query => {
     if (productSupportMatch && isAdmin(userId)) {
       const merchantId = parseInt(productSupportMatch[1], 10);
       await showDigitalProductSupportAdmin(userId, merchantId);
+      await bot.answerCallbackQuery(query.id);
+      return;
+    }
+
+
+    const toggleProductInviteMatch = data.match(/^admin_toggle_product_invite_(\d+)$/);
+    if (toggleProductInviteMatch && isAdmin(userId)) {
+      const merchantId = parseInt(toggleProductInviteMatch[1], 10);
+      const merchant = await Merchant.findByPk(merchantId);
+      if (merchant) {
+        const meta = getMerchantMetaConfig(merchant);
+        const nextValue = !(meta.inviteMode || meta.requiresEmailActivation);
+        setMerchantMetaConfig(merchant, { inviteMode: nextValue, requiresEmailActivation: nextValue });
+        await merchant.save();
+      }
+      await showDigitalProductAdmin(userId, merchantId);
+      await bot.answerCallbackQuery(query.id);
+      return;
+    }
+
+    const productInviteGuideMatch = data.match(/^admin_product_invite_guide_(\d+)$/);
+    if (productInviteGuideMatch && isAdmin(userId)) {
+      const merchantId = parseInt(productInviteGuideMatch[1], 10);
+      await setUserState(userId, { action: 'set_product_invite_guide', merchantId });
+      await bot.sendMessage(userId, await getText(userId, 'askInviteGuideContent'), {
+        reply_markup: await getBackAndCancelReplyMarkup(userId, `admin_digital_product_${merchantId}`)
+      });
       await bot.answerCallbackQuery(query.id);
       return;
     }
@@ -12342,6 +12551,40 @@ bot.on('message', async msg => {
       return;
     }
 
+    if (state?.action === 'set_product_invite_guide' && isAdmin(userId)) {
+      const merchant = await Merchant.findByPk(state.merchantId);
+      if (!merchant) {
+        await bot.sendMessage(userId, await getText(userId, 'error'));
+        await clearUserState(userId);
+        return;
+      }
+      const captionText = String(msg.caption || text || '').trim();
+      if (String(text || '').trim() === '/empty') {
+        setMerchantMetaConfig(merchant, { inviteGuideType: '', inviteGuideText: '', inviteGuideFileId: '', inviteGuideCaption: '' });
+        await merchant.save();
+        await clearUserState(userId);
+        await bot.sendMessage(userId, await getText(userId, 'inviteGuideCleared'));
+        await showDigitalProductAdmin(userId, merchant.id);
+        return;
+      }
+      if (photo && photo.length) {
+        const fileId = photo[photo.length - 1].file_id;
+        setMerchantMetaConfig(merchant, { inviteGuideType: 'photo', inviteGuideText: '', inviteGuideFileId: fileId, inviteGuideCaption: captionText });
+      } else if (video && video.file_id) {
+        setMerchantMetaConfig(merchant, { inviteGuideType: 'video', inviteGuideText: '', inviteGuideFileId: video.file_id, inviteGuideCaption: captionText });
+      } else if (String(text || '').trim()) {
+        setMerchantMetaConfig(merchant, { inviteGuideType: 'text', inviteGuideText: String(text || '').trim(), inviteGuideFileId: '', inviteGuideCaption: '' });
+      } else {
+        await bot.sendMessage(userId, await getText(userId, 'askInviteGuideContent'));
+        return;
+      }
+      await merchant.save();
+      await clearUserState(userId);
+      await bot.sendMessage(userId, await getText(userId, 'inviteGuideUpdated'));
+      await showDigitalProductAdmin(userId, merchant.id);
+      return;
+    }
+
     if (state?.action === 'set_product_support_contact' && isAdmin(userId)) {
       const merchant = await Merchant.findByPk(state.merchantId);
       if (!merchant) {
@@ -12399,9 +12642,12 @@ bot.on('message', async msg => {
         await bot.sendMessage(userId, await getText(userId, 'error'));
         return;
       }
-      const adminNotice = await sendActivationRequestToAdmin(userId, merchant, email, amount);
-      await createActivationRequestRecord(userId, merchant, email, amount, adminNotice?.sent?.message_id || null);
-      await bot.sendMessage(userId, await getText(userId, 'activationRequestSent', { service: await getMerchantDisplayName(merchant, userId), email, amount: formatUsdPrice(amount), time: adminNotice.timestamp }), { reply_markup: { inline_keyboard: [[{ text: await getText(userId, 'back'), callback_data: 'back_to_menu' }]] } });
+      const requestRecord = await createActivationRequestRecord(userId, merchant, email, amount, null);
+      const adminNotice = await sendActivationRequestToAdmin(userId, merchant, email, amount, requestRecord);
+      const sentUserActivation = await bot.sendMessage(userId, await getText(userId, 'activationProcessingSoon', { service: await getMerchantDisplayName(merchant, userId), email, amount: formatUsdPrice(amount), time: adminNotice.timestamp }), { reply_markup: { inline_keyboard: [[{ text: await getText(userId, 'back'), callback_data: 'back_to_menu' }]] } });
+      if (sentUserActivation?.message_id) {
+        await safePinChatMessage(userId, sentUserActivation.message_id);
+      }
       await clearUserState(userId);
       return;
     }
