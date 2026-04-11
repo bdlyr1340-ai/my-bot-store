@@ -1517,6 +1517,25 @@ Object.assign(DEFAULT_TEXTS.ar, {
   binancePayApiStatusNotFound: 'الطلب غير موجود.'
 });
 
+
+Object.assign(DEFAULT_TEXTS.en, {
+  activationRefundButton: '💸 Refund money',
+  activationRefundNoCharge: '✅ No amount was deducted from your balance, so nothing needs to be refunded.',
+  activationApprovedChargeFailedUser: '❌ Your request was approved, but your balance is no longer enough to complete activation. Please recharge and contact support.',
+  activationApprovedChargeFailedAdmin: '❌ Activation cannot be completed because the user balance is no longer enough.',
+  activationSupportAfterDone: '📞 Contact support',
+  priceInlineLabel: '{name} - {price} USD'
+});
+
+Object.assign(DEFAULT_TEXTS.ar, {
+  activationRefundButton: '💸 استرجاع الاموال',
+  activationRefundNoCharge: '✅ لم يتم خصم أي مبلغ من رصيدك، لذلك لا حاجة للاسترجاع.',
+  activationApprovedChargeFailedUser: '❌ تمت الموافقة على طلبك لكن رصيدك الحالي لم يعد كافياً لإكمال التفعيل. يرجى الشحن ثم التواصل مع الدعم.',
+  activationApprovedChargeFailedAdmin: '❌ لا يمكن إكمال التفعيل لأن رصيد المستخدم الحالي لم يعد كافياً.',
+  activationSupportAfterDone: '📞 تواصل مع الدعم',
+  priceInlineLabel: '{name} - {price} دولار'
+});
+
 function isAdmin(userId) {
   return Number(userId) === ADMIN_ID;
 }
@@ -2599,6 +2618,44 @@ async function getActivationSupportReplyMarkup(userId, merchant) {
 }
 
 
+async function getActivationRejectedReplyMarkup(userId, merchant, requestId) {
+  const contacts = getMerchantSupportContacts(merchant);
+  const rows = [];
+  rows.push([{ text: await getText(userId, 'activationRefundButton'), callback_data: `activation_refund_${requestId}` }]);
+  if (contacts.telegram) rows.push([{ text: await getText(userId, 'openTelegram'), url: contacts.telegram }]);
+  if (contacts.whatsapp) rows.push([{ text: await getText(userId, 'openWhatsApp'), url: contacts.whatsapp }]);
+  if (contacts.extraLabel && contacts.extraUrl) rows.push([{ text: await getText(userId, 'openExtraContact', { label: contacts.extraLabel }), url: contacts.extraUrl }]);
+  rows.push([{ text: await getText(userId, 'back'), callback_data: 'back_to_menu' }]);
+  return { inline_keyboard: rows };
+}
+
+async function chargeActivationRequestOnApproval(request) {
+  const amount = Number(request?.chargedAmount || 0);
+  if (!request || amount <= 0) return { success: true, charged: false };
+  if (String(request.notes || '').includes('charged_on_activation')) {
+    return { success: true, charged: false, alreadyCharged: true };
+  }
+  const user = await User.findByPk(request.userId);
+  const currentBalance = Number(user?.balance || 0);
+  if (currentBalance < amount) {
+    return { success: false, reason: 'insufficient_balance', balance: currentBalance, amount };
+  }
+  const t = await sequelize.transaction();
+  try {
+    await User.update({ balance: currentBalance - amount }, { where: { id: request.userId }, transaction: t });
+    await BalanceTransaction.create({ userId: request.userId, amount: -amount, type: 'digital_activation_purchase', status: 'completed' }, { transaction: t });
+    request.notes = [String(request.notes || '').trim(), 'charged_on_activation'].filter(Boolean).join(' | ');
+    await request.save({ transaction: t });
+    await t.commit();
+    return { success: true, charged: true, newBalance: currentBalance - amount };
+  } catch (err) {
+    await t.rollback().catch(() => {});
+    console.error('chargeActivationRequestOnApproval error:', err);
+    return { success: false, reason: 'db_error' };
+  }
+}
+
+
 function getMerchantInviteGuideConfig(merchant) {
   const meta = getMerchantMetaConfig(merchant);
   return {
@@ -2690,7 +2747,8 @@ async function createActivationRequestRecord(userId, merchant, email, amount, ad
     email,
     chargedAmount: amount,
     adminMessageId,
-    status: 'pending'
+    status: 'pending',
+    notes: 'not_charged_yet'
   });
 }
 
@@ -3206,7 +3264,8 @@ async function showDigitalProductDetails(userId, merchantId) {
   const stock = await getMerchantAvailableStock(merchant.id);
   const inviteModeForUser = await isEmailActivationProduct(merchant);
   const stockLabel = inviteModeForUser ? await getText(userId, 'onDemandStock') : stock;
-  const name = await getMerchantDisplayName(merchant, userId);
+  const baseName = await getMerchantDisplayName(merchant, userId);
+  const name = await getText(userId, 'priceInlineLabel', { name: baseName, price: formatUsdPrice(merchant.price) });
   let details = await getMerchantDescriptionForUser(userId, merchant);
 
   if (!details) {
@@ -9087,11 +9146,17 @@ bot.on('callback_query', async query => {
       const merchant = await Merchant.findByPk(merchantId);
       const request = await ActivationRequest.findOne({ where: { merchantId, userId: targetUserId, status: { [Op.in]: ['pending', 'delayed_offered', 'delayed_accepted'] } }, order: [['id', 'DESC']] });
       if (merchant && request) {
+        const chargeResult = await chargeActivationRequestOnApproval(request);
+        if (!chargeResult.success) {
+          await bot.sendMessage(targetUserId, await getText(targetUserId, 'activationApprovedChargeFailedUser'), { reply_markup: await getActivationSupportReplyMarkup(targetUserId, merchant) });
+          await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'activationApprovedChargeFailedAdmin') });
+          return;
+        }
         request.status = 'activated';
         request.activatedAt = new Date();
         request.decidedAt = new Date();
         await request.save();
-        await bot.sendMessage(targetUserId, await getText(targetUserId, 'activationDoneUser', { service: await getMerchantDisplayName(merchant, targetUserId), email: request.email }), { reply_markup: { inline_keyboard: [[{ text: await getText(targetUserId, 'back'), callback_data: 'back_to_menu' }]] } });
+        await bot.sendMessage(targetUserId, await getText(targetUserId, 'activationDoneUser', { service: await getMerchantDisplayName(merchant, targetUserId), email: request.email }), { reply_markup: await getActivationSupportReplyMarkup(targetUserId, merchant) });
         await sendInviteGuideToUser(targetUserId, merchant);
         await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'activationApprove') });
       } else {
@@ -9188,11 +9253,45 @@ bot.on('callback_query', async query => {
         request.status = 'not_activated';
         request.decidedAt = new Date();
         await request.save();
-        await bot.sendMessage(targetUserId, await getText(targetUserId, 'activationRejectedUser', { service: await getMerchantDisplayName(merchant, targetUserId), email: request.email }), { reply_markup: await getActivationSupportReplyMarkup(targetUserId, merchant) });
+        await bot.sendMessage(targetUserId, await getText(targetUserId, 'activationRejectedUser', { service: await getMerchantDisplayName(merchant, targetUserId), email: request.email }), { reply_markup: await getActivationRejectedReplyMarkup(targetUserId, merchant, request.id) });
         await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'activationReject') });
       } else {
         await bot.answerCallbackQuery(query.id, { text: 'Not found' });
       }
+
+
+    const activationRefundMatch = data.match(/^activation_refund_(\d+)$/);
+    if (activationRefundMatch) {
+      const requestId = parseInt(activationRefundMatch[1], 10);
+      const request = await ActivationRequest.findByPk(requestId);
+      if (!request || Number(request.userId) !== Number(userId)) {
+        await bot.answerCallbackQuery(query.id);
+        return;
+      }
+      if (String(request.notes || '').includes('charged_on_activation') && request.status !== 'refunded') {
+        const amount = Number(request.chargedAmount || 0);
+        const userRow = await User.findByPk(userId);
+        const currentBalance = Number(userRow?.balance || 0);
+        const t = await sequelize.transaction();
+        try {
+          await User.update({ balance: currentBalance + amount }, { where: { id: userId }, transaction: t });
+          await BalanceTransaction.create({ userId, amount, type: 'digital_activation_refund', status: 'completed' }, { transaction: t });
+          request.status = 'refunded';
+          request.notes = [String(request.notes || '').trim(), 'refunded_after_reject'].filter(Boolean).join(' | ');
+          request.decidedAt = new Date();
+          await request.save({ transaction: t });
+          await t.commit();
+        } catch (err) {
+          await t.rollback().catch(() => {});
+          console.error('activation_refund error:', err);
+          await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'error') });
+          return;
+        }
+      }
+      await bot.sendMessage(userId, await getText(userId, 'activationRefundNoCharge'));
+      await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'activationRefundButton') });
+      return;
+    }
       return;
     }
 
@@ -12690,17 +12789,6 @@ bot.on('message', async msg => {
       const balance = await getUserBalanceValue(userId);
       if (balance < amount) {
         await bot.sendMessage(userId, await getText(userId, 'insufficientBalance', { balance: balance.toFixed(2), price: amount.toFixed(2), needed: amount.toFixed(2) }), { reply_markup: { inline_keyboard: [[{ text: await getText(userId, 'depositNow'), callback_data: 'deposit' }]] } });
-        return;
-      }
-      const t = await sequelize.transaction();
-      try {
-        await User.update({ balance: balance - amount }, { where: { id: userId }, transaction: t });
-        await BalanceTransaction.create({ userId, amount: -amount, type: 'digital_activation_purchase', status: 'completed' }, { transaction: t });
-        await t.commit();
-      } catch (err) {
-        await t.rollback().catch(() => {});
-        console.error('digital_email_activation_purchase error:', err);
-        await bot.sendMessage(userId, await getText(userId, 'error'));
         return;
       }
       const requestRecord = await createActivationRequestRecord(userId, merchant, email, amount, null);
