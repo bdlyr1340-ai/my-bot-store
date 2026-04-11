@@ -550,6 +550,11 @@ const DEFAULT_TEXTS = {
     channelLinkSet: '✅ Channel link updated!',
     channelMessageSet: '✅ Channel message updated!',
     buttonVisibilityUpdated: '✅ Button visibility updated!',
+    featureRemoved: '⛔ This section has been removed from this version to keep the bot organized.',
+    chooseDepositMethodType: 'Choose the deposit method:',
+    enterDepositAmountForCurrency: 'Send the top-up amount in USD for {currency}:',
+    deleteDepositMethodConfirm: '⚠️ Are you sure you want to delete this payment method?',
+    deleteDepositMethodDone: '✅ Payment method deleted.',
     setIQDRate: '💰 Set IQD Exchange Rate',
     setUSDTWallet: '🏦 Set USDT Wallet Address',
     setIQDWallet: '🏦 Set IQD SuperKey',
@@ -916,6 +921,11 @@ const DEFAULT_TEXTS = {
     channelLinkSet: '✅ تم تحديث رابط القناة!',
     channelMessageSet: '✅ تم تحديث نص الرسالة!',
     buttonVisibilityUpdated: '✅ تم تحديث ظهور الأزرار!',
+    featureRemoved: '⛔ تم حذف هذا القسم من هذه النسخة للحفاظ على ترتيب البوت.',
+    chooseDepositMethodType: 'اختر طريقة الشحن:',
+    enterDepositAmountForCurrency: 'أرسل مبلغ الشحن بالدولار لطريقة {currency}:',
+    deleteDepositMethodConfirm: '⚠️ هل أنت متأكد من حذف طريقة الدفع هذه؟',
+    deleteDepositMethodDone: '✅ تم حذف طريقة الدفع.',
     setIQDRate: '💰 تعيين سعر صرف الدينار',
     setUSDTWallet: '🏦 تعيين عنوان محفظة USDT',
     setIQDWallet: '🏦 تعيين السوبر كي للدينار',
@@ -5199,7 +5209,7 @@ async function showDepositMethodsAdmin(userId, currency) {
 async function showDeleteDepositMethodsMenu(userId, currency) {
   const config = await getDepositConfig(currency);
   const methods = normalizeDepositMethods(config.methods);
-  const buttons = methods.map((m, i) => [{ text: `${m.nameAr || m.nameEn} / ${m.nameEn || m.nameAr}`, callback_data: `admin_delete_deposit_method_${currency}_${i}` }]);
+  const buttons = methods.map((m, i) => [{ text: `${m.nameAr || m.nameEn} / ${m.nameEn || m.nameAr}`, callback_data: `admin_confirm_delete_deposit_method_${currency}_${i}` }]);
   buttons.push([{ text: await getText(userId, 'back'), callback_data: currency === 'IQD' ? 'admin_manage_iqd_methods' : 'admin_manage_usd_methods' }]);
   await bot.sendMessage(userId, await getText(userId, 'deleteDepositMethod'), { reply_markup: { inline_keyboard: buttons } });
 }
@@ -5227,8 +5237,8 @@ async function deleteDepositMethod(currency, index) {
 
 
 const DEFAULT_DEPOSIT_OPTION_VISIBILITY = {
-  IQD: false,
-  USD: false,
+  IQD: true,
+  USD: true,
   BINANCE_AUTO: true
 };
 
@@ -5254,6 +5264,8 @@ async function showDepositOptionsAdmin(userId) {
   const visibility = await getDepositOptionVisibility();
   const keyboard = {
     inline_keyboard: [
+      [{ text: `${visibility.IQD ? '✅' : '❌'} ${await getText(userId, 'depositOptionIQD')}`, callback_data: 'admin_toggle_deposit_option_IQD' }],
+      [{ text: `${visibility.USD ? '✅' : '❌'} ${await getText(userId, 'depositOptionUSD')}`, callback_data: 'admin_toggle_deposit_option_USD' }],
       [{ text: `${visibility.BINANCE_AUTO ? '✅' : '❌'} ${await getText(userId, 'depositOptionBinanceAuto')}`, callback_data: 'admin_toggle_deposit_option_BINANCE_AUTO' }],
       [{ text: await getText(userId, 'back'), callback_data: 'admin_manage_deposit_settings' }]
     ]
@@ -5261,22 +5273,19 @@ async function showDepositOptionsAdmin(userId) {
   await bot.sendMessage(userId, await getText(userId, 'manageDepositOptions'), { reply_markup: keyboard });
 }
 
-
-// -------------------------------------------------------------------
-// تعديل showCurrencyOptions لإضافة زر بايننس أوتوماتيكي
 async function showCurrencyOptions(userId) {
-  const user = await User.findByPk(userId);
-  const lang = user?.lang || 'en';
   const visibility = await getDepositOptionVisibility();
   const rows = [];
+
+  if (visibility.IQD !== false) rows.push([{ text: `💳 ${await getDepositDisplayName(userId, 'IQD')}`, callback_data: 'deposit_currency_iqd' }]);
+  if (visibility.USD !== false) rows.push([{ text: `💳 ${await getDepositDisplayName(userId, 'USD')}`, callback_data: 'deposit_currency_usd' }]);
   if (visibility.BINANCE_AUTO !== false) rows.push([{ text: '⚡ Binance Pay (USDT)', callback_data: 'deposit_binance_auto' }]);
+
   rows.push([{ text: await getText(userId, 'back'), callback_data: 'back_to_menu' }]);
 
-  const extraText = visibility.BINANCE_AUTO === false ? '' : (lang === 'ar'
-    ? '\n\nطريقة الشحن الحالية: ⚡ Binance Pay (USDT)'
-    : '\n\nCurrent topup method: ⚡ Binance Pay (USDT)');
-
-  await bot.sendMessage(userId, `${await getText(userId, 'chooseCurrency')}${extraText}`, { reply_markup: { inline_keyboard: rows } });
+  await bot.sendMessage(userId, await getText(userId, 'chooseDepositMethodType'), {
+    reply_markup: { inline_keyboard: rows }
+  });
 }
 
 async function showBinanceAutoAmountOptions(userId) {
@@ -7306,18 +7315,11 @@ async function showAdminPanel(userId) {
 
   const keyboard = {
     inline_keyboard: [
-      [{ text: await getText(userId, 'manageBots'), callback_data: 'admin_manage_bots' }],
+      [{ text: await getText(userId, 'paymentMethods'), callback_data: 'admin_manage_deposit_settings' }],
       [{ text: await getText(userId, 'manageMenuButtons'), callback_data: 'admin_manage_menu_buttons' }],
-      [{ text: await getText(userId, 'manageChannel'), callback_data: 'admin_manage_channel' }],
-      [{ text: '📦 قناة الكودات الخاصة', callback_data: 'admin_private_codes_channel' }],
-      [{ text: await getText(userId, 'manageDepositSettings'), callback_data: 'admin_manage_deposit_settings' }],
       [{ text: await getText(userId, 'digitalSubscriptions'), callback_data: 'admin_digital_subscriptions' }],
-      [{ text: await getText(userId, 'addMerchant'), callback_data: 'admin_add_merchant' }],
-      [{ text: await getText(userId, 'listMerchants'), callback_data: 'admin_list_merchants' }],
       [{ text: await getText(userId, 'setPrice'), callback_data: 'admin_set_price' }],
-      [{ text: await getText(userId, 'setChatgptPrice'), callback_data: 'admin_set_chatgpt_price' }],
       [{ text: await getText(userId, 'addCodes'), callback_data: 'admin_add_codes' }],
-      [{ text: await getText(userId, 'paymentMethods'), callback_data: 'admin_payment_methods' }],
       [{ text: await getText(userId, 'stats'), callback_data: 'admin_stats' }],
       [{ text: await getText(userId, 'referralSettings'), callback_data: 'admin_referral_settings' }],
       [{ text: await getText(userId, 'manageRedeemServices'), callback_data: 'admin_manage_redeem_services' }],
@@ -7334,6 +7336,7 @@ async function showAdminPanel(userId) {
 
   await bot.sendMessage(userId, await getText(userId, 'adminPanel'), { reply_markup: keyboard });
 }
+
 
 async function showReferralSettingsAdmin(userId) {
   const percent = await getReferralPercent();
@@ -7398,9 +7401,7 @@ async function showReferralStockSettingsAdmin(userId) {
       [{ text: await getText(userId, 'addReferralStockCodes'), callback_data: 'admin_add_referral_stock_codes' }],
       [{ text: await getText(userId, 'viewReferralStockCount'), callback_data: 'admin_view_referral_stock_count' }],
       [{ text: await getText(userId, 'searchReferralStockDuplicates'), callback_data: 'admin_search_referral_stock_duplicates' }],
-      [{ text: await getText(userId, 'importReferralStockFromPrivateChannel'), callback_data: 'admin_import_referral_stock_from_private_channel' }],
       [{ text: await getText(userId, 'searchDeleteReferralStockCodes'), callback_data: 'admin_prompt_delete_referral_stock_codes' }],
-      [{ text: await getText(userId, 'privateReferralChannelButton'), callback_data: 'admin_referral_codes_channel' }],
       [{ text: await getText(userId, 'back'), callback_data: 'admin_referral_settings' }]
     ]
   };
@@ -8656,7 +8657,12 @@ bot.on('callback_query', async query => {
     }
 
     if (data === 'deposit_currency_iqd' || data === 'deposit_currency_usd') {
-      await showBinanceAutoAmountOptions(userId);
+      const currency = data === 'deposit_currency_iqd' ? 'IQD' : 'USD';
+      const currencyLabel = await getDepositDisplayName(userId, currency);
+      await setUserState(userId, { action: 'deposit_amount', currency });
+      await bot.sendMessage(userId, await getText(userId, 'enterDepositAmountForCurrency', { currency: currencyLabel }), {
+        reply_markup: await getBackAndCancelReplyMarkup(userId, 'deposit')
+      });
       await cleanupPressedMessage();
       await bot.answerCallbackQuery(query.id);
       return;
@@ -8710,6 +8716,14 @@ bot.on('callback_query', async query => {
       return;
     }
 
+
+    if ((data === 'admin_manage_bots' || data === 'admin_add_merchant' || data === 'admin_list_merchants' || data === 'admin_set_chatgpt_price' || data === 'admin_manage_channel' || data === 'admin_private_codes_channel' || data === 'admin_import_referral_stock_from_private_channel' || data === 'admin_referral_codes_channel') && isAdmin(userId)) {
+      await bot.sendMessage(userId, await getText(userId, 'featureRemoved'), {
+        reply_markup: { inline_keyboard: [[{ text: await getText(userId, 'back'), callback_data: 'admin' }]] }
+      });
+      await bot.answerCallbackQuery(query.id);
+      return;
+    }
 
     if (data === 'admin_toggle_ai_assistant' && isAdmin(userId)) {
       const enabled = await getAiAssistantEnabled();
@@ -8949,13 +8963,36 @@ bot.on('callback_query', async query => {
       return;
     }
 
+    if (data.startsWith('admin_confirm_delete_deposit_method_') && isAdmin(userId)) {
+      const parts = data.split('_');
+      const currency = parts[5];
+      const index = parseInt(parts[6], 10);
+      const config = await getDepositConfig(currency);
+      const methods = normalizeDepositMethods(config.methods);
+      const method = methods[index];
+      if (!method) {
+        await bot.answerCallbackQuery(query.id);
+        return;
+      }
+      await bot.sendMessage(userId, await getText(userId, 'deleteDepositMethodConfirm'), {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: await getText(userId, 'yes'), callback_data: `admin_delete_deposit_method_${currency}_${index}` }],
+            [{ text: await getText(userId, 'no'), callback_data: `admin_manage_${currency.toLowerCase()}_methods` }]
+          ]
+        }
+      });
+      await bot.answerCallbackQuery(query.id);
+      return;
+    }
+
     if (data.startsWith('admin_delete_deposit_method_') && isAdmin(userId)) {
       const parts = data.split('_');
       const currency = parts[4];
       const index = parseInt(parts[5], 10);
       if (!Number.isNaN(index)) {
         await deleteDepositMethod(currency, index);
-        await bot.sendMessage(userId, await getText(userId, 'methodDeleted'));
+        await bot.sendMessage(userId, await getText(userId, 'deleteDepositMethodDone'));
         await showDepositMethodsAdmin(userId, currency);
       }
       await bot.answerCallbackQuery(query.id);
@@ -11789,13 +11826,15 @@ bot.on('message', async msg => {
 
     if (state?.action === 'deposit_amount') {
       const amount = parseFloat(text);
+      const currency = state.currency === 'IQD' ? 'IQD' : 'USD';
       if (Number.isNaN(amount) || amount <= 0) {
-        await bot.sendMessage(userId, await getText(userId, 'enterDepositAmount'), {
+        const currencyLabel = await getDepositDisplayName(userId, currency);
+        await bot.sendMessage(userId, await getText(userId, 'enterDepositAmountForCurrency', { currency: currencyLabel }), {
           reply_markup: await getBackAndCancelReplyMarkup(userId, 'deposit')
         });
         return;
       }
-      await sendBinanceAutoInstructions(userId, amount);
+      await showPaymentMethodsForDeposit(userId, amount, currency);
       return;
     }
 
