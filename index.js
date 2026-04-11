@@ -26,6 +26,8 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY || process.env.OPENAI_KEY || '
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 const OPENAI_BASE_URL = String(process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '');
 const APP_TIMEZONE = String(process.env.APP_TIMEZONE || 'Asia/Baghdad');
+const DEFAULT_SUPPORT_TELEGRAM_URL = String(process.env.DEFAULT_SUPPORT_TELEGRAM_URL || 'https://t.me/xawasx').trim();
+const DEFAULT_SUPPORT_WHATSAPP_URL = String(process.env.DEFAULT_SUPPORT_WHATSAPP_URL || 'https://wa.me/9647882891545').trim();
 
 if (!TOKEN || Number.isNaN(ADMIN_ID) || !DATABASE_URL) {
   console.error('❌ Missing required environment variables');
@@ -242,6 +244,25 @@ const Captcha = sequelize.define('Captcha', {
   expiresAt: { type: DataTypes.DATE, allowNull: false }
 });
 
+const ActivationRequest = sequelize.define('ActivationRequest', {
+  id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
+  userId: { type: DataTypes.BIGINT, allowNull: false },
+  merchantId: { type: DataTypes.INTEGER, allowNull: false, references: { model: Merchant, key: 'id' } },
+  email: { type: DataTypes.STRING, allowNull: false },
+  status: { type: DataTypes.STRING, allowNull: false, defaultValue: 'pending' },
+  adminMessageId: { type: DataTypes.BIGINT, allowNull: true },
+  chargedAmount: { type: DataTypes.DECIMAL(10, 2), allowNull: false, defaultValue: 0 },
+  decidedAt: { type: DataTypes.DATE, allowNull: true },
+  activatedAt: { type: DataTypes.DATE, allowNull: true },
+  notes: { type: DataTypes.TEXT, allowNull: true }
+}, {
+  indexes: [
+    { fields: ['userId'] },
+    { fields: ['merchantId'] },
+    { fields: ['status'] }
+  ]
+});
+
 const PrivateChannelCodePostCache = sequelize.define('PrivateChannelCodePostCache', {
   id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
   channelChatId: { type: DataTypes.STRING, allowNull: false },
@@ -267,6 +288,10 @@ BotStat.belongsTo(BotService);
 User.hasMany(ReferralReward, { as: 'Referrer', foreignKey: 'referrerId' });
 User.hasMany(ReferralReward, { as: 'Referred', foreignKey: 'referredId' });
 DiscountCode.belongsTo(User, { as: 'creator', foreignKey: 'createdBy' });
+User.hasMany(ActivationRequest, { foreignKey: 'userId' });
+ActivationRequest.belongsTo(User, { foreignKey: 'userId' });
+Merchant.hasMany(ActivationRequest, { foreignKey: 'merchantId' });
+ActivationRequest.belongsTo(Merchant, { foreignKey: 'merchantId' });
 
 const DEFAULT_TEXTS = {
   en: {
@@ -617,6 +642,36 @@ const DEFAULT_TEXTS = {
     askDigitalProductPrice: 'Send the item price in USD:',
     askDigitalProductDescription: 'Send the item details (text, photo, video, or /skip):',
     digitalProductCreated: '✅ The digital item was created successfully! ID: {id}',
+    toggleSectionMainMenuShow: '👁 Show on: Main Menu',
+    toggleSectionMainMenuHide: '🙈 Hide from: Main Menu',
+    sectionMovedUp: '✅ Section moved up.',
+    sectionMovedDown: '✅ Section moved down.',
+    askSubscriptionEmail: '📧 Send the account email for this subscription now:',
+    invalidEmail: '❌ Invalid email. Please send a valid email address.',
+    activationRequestSent: '✅ Your subscription request was received.\n\nService: {service}\nEmail: {email}\nAmount: {amount} USD\nTime: {time}\n\nPlease wait for admin activation.',
+    activationRequestAdminTitle: '📥 New subscription activation request',
+    activationRequestAdminBody: 'Service: {service}\nUser: {name}\nUsername: {username}\nUser ID: {userId}\nEmail: {email}\nAmount: {amount} USD\nTime: {time}',
+    activationApprove: '✅ Activated',
+    activationReject: '❌ Not activated',
+    activationDoneUser: '✅ Your subscription has been activated successfully.\n\nService: {service}\nEmail: {email}',
+    activationRejectedUser: '❌ Your subscription is still not activated.\n\nService: {service}\nEmail: {email}\n\nIf you want, contact support مباشرة from the buttons below.',
+    contactSupportNow: '📞 Contact support now',
+    openTelegram: '💬 Telegram',
+    openWhatsApp: '🟢 WhatsApp',
+    openExtraContact: '{label}',
+    supportSettingsTitle: '📞 Support settings for: {name}',
+    currentSupportTelegram: 'Telegram: {value}',
+    currentSupportWhatsapp: 'WhatsApp: {value}',
+    currentSupportExtra: 'Extra contact: {value}',
+    setProductTelegramSupport: '💬 Set Telegram support',
+    setProductWhatsappSupport: '🟢 Set WhatsApp support',
+    setProductExtraSupport: '➕ Set extra contact',
+    clearProductExtraSupport: '🗑 Clear extra contact',
+    askProductTelegramSupport: 'Send the Telegram link or username (example: https://t.me/example or @example).',
+    askProductWhatsappSupport: 'Send the WhatsApp number or link.',
+    askProductExtraSupport: 'Send the extra contact in this format: Label | URL',
+    supportSettingsUpdated: '✅ Support settings updated.',
+    supportSettingsCleared: '✅ Extra contact removed.',
     digitalProductManageText: '🧾 {name}\nPrice: {price} USD\nRemaining stock: {stock}\nType: {type}',
     addDigitalProductStock: '📦 Add stock/accounts',
     digitalStockInputPrompt: 'Send the stock/accounts now.\n\nFor account items, send the email on one line and the password on the next line for each account.',
@@ -968,6 +1023,36 @@ const DEFAULT_TEXTS = {
     askDigitalProductPrice: 'أرسل سعر الاشتراك بالدولار:',
     askDigitalProductDescription: 'أرسل تفاصيل الاشتراك (نص، صورة، فيديو، أو /skip):',
     digitalProductCreated: '✅ تم إنشاء الاشتراك الرقمي بنجاح! المعرف: {id}',
+    toggleSectionMainMenuShow: '👁 عرض على: القائمة الرئيسية',
+    toggleSectionMainMenuHide: '🙈 إخفاء من: القائمة الرئيسية',
+    sectionMovedUp: '✅ تم رفع الخانة.',
+    sectionMovedDown: '✅ تم تنزيل الخانة.',
+    askSubscriptionEmail: '📧 أرسل الآن الإيميل الخاص بهذا الاشتراك:',
+    invalidEmail: '❌ الإيميل غير صالح. أرسل بريدًا إلكترونيًا صحيحًا.',
+    activationRequestSent: '✅ تم استلام طلب الاشتراك الخاص بك.\n\nالخدمة: {service}\nالإيميل: {email}\nالمبلغ: {amount} دولار\nالوقت: {time}\n\nيرجى انتظار التفعيل من الأدمن.',
+    activationRequestAdminTitle: '📥 طلب تفعيل اشتراك جديد',
+    activationRequestAdminBody: 'الخدمة: {service}\nالاسم: {name}\nالمعرف: {username}\nايدي المستخدم: {userId}\nالإيميل: {email}\nالمبلغ: {amount} دولار\nالوقت: {time}',
+    activationApprove: '✅ تم التفعيل',
+    activationReject: '❌ ليس مفعل',
+    activationDoneUser: '✅ تم تفعيل اشتراكك بنجاح.\n\nالخدمة: {service}\nالإيميل: {email}',
+    activationRejectedUser: '❌ اشتراكك ما زال غير مفعل.\n\nالخدمة: {service}\nالإيميل: {email}\n\nإذا تريد يمكنك التواصل مع الدعم مباشرة من الأزرار أدناه.',
+    contactSupportNow: '📞 تواصل مع الدعم الآن',
+    openTelegram: '💬 تيليجرام',
+    openWhatsApp: '🟢 واتساب',
+    openExtraContact: '{label}',
+    supportSettingsTitle: '📞 إعدادات التواصل للمنتج: {name}',
+    currentSupportTelegram: 'تيليجرام: {value}',
+    currentSupportWhatsapp: 'واتساب: {value}',
+    currentSupportExtra: 'تواصل إضافي: {value}',
+    setProductTelegramSupport: '💬 تعيين تيليجرام الدعم',
+    setProductWhatsappSupport: '🟢 تعيين واتساب الدعم',
+    setProductExtraSupport: '➕ تعيين تواصل إضافي',
+    clearProductExtraSupport: '🗑 حذف التواصل الإضافي',
+    askProductTelegramSupport: 'أرسل رابط أو معرف التيليجرام (مثال: https://t.me/example أو @example).',
+    askProductWhatsappSupport: 'أرسل رقم الواتساب أو رابطه.',
+    askProductExtraSupport: 'أرسل التواصل الإضافي بهذا الشكل: الاسم | الرابط',
+    supportSettingsUpdated: '✅ تم تحديث إعدادات التواصل.',
+    supportSettingsCleared: '✅ تم حذف التواصل الإضافي.',
     digitalProductManageText: '🧾 {name}\nالسعر: {price} دولار\nالمخزون المتبقي: {stock}\nالنوع: {type}',
     addDigitalProductStock: '📦 إضافة مخزون/حسابات',
     digitalStockInputPrompt: 'أرسل الآن المخزون/الحسابات.\n\nإذا كان المنتج حسابات، فأرسل الإيميل في سطر والباسورد في السطر الذي بعده لكل حساب.',
@@ -2307,6 +2392,125 @@ function getMerchantPlainDescription(merchant) {
   return '';
 }
 
+
+function normalizeTelegramUrl(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (raw.startsWith('@')) return `https://t.me/${raw.slice(1)}`;
+  return `https://t.me/${raw.replace(/^@+/, '')}`;
+}
+
+function normalizeWhatsappUrl(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^https?:\/\//i.test(raw)) return raw;
+  const digits = raw.replace(/\D+/g, '');
+  return digits ? `https://wa.me/${digits}` : '';
+}
+
+function getMerchantMetaConfig(merchant) {
+  if (!merchant?.description || typeof merchant.description !== 'object' || Array.isArray(merchant.description)) return {};
+  return merchant.description.meta && typeof merchant.description.meta === 'object' ? { ...merchant.description.meta } : {};
+}
+
+function setMerchantMetaConfig(merchant, patch = {}) {
+  const description = merchant?.description && typeof merchant.description === 'object' && !Array.isArray(merchant.description)
+    ? { ...merchant.description }
+    : { type: 'text', content: '' };
+  description.meta = { ...getMerchantMetaConfig(merchant), ...patch };
+  merchant.description = description;
+  return description.meta;
+}
+
+function getMerchantSupportContacts(merchant) {
+  const meta = getMerchantMetaConfig(merchant);
+  const telegram = normalizeTelegramUrl(meta.supportTelegram || DEFAULT_SUPPORT_TELEGRAM_URL);
+  const whatsapp = normalizeWhatsappUrl(meta.supportWhatsapp || DEFAULT_SUPPORT_WHATSAPP_URL);
+  const extraLabel = String(meta.supportExtraLabel || '').trim();
+  const extraUrl = String(meta.supportExtraUrl || '').trim();
+  return { telegram, whatsapp, extraLabel, extraUrl };
+}
+
+async function isEmailActivationProduct(merchant) {
+  if (!merchant || !isDigitalSectionCategory(merchant.category)) return false;
+  const meta = getMerchantMetaConfig(merchant);
+  if (typeof meta.requiresEmailActivation === 'boolean') return meta.requiresEmailActivation;
+  const stock = await getMerchantAvailableStock(merchant.id);
+  return stock <= 0;
+}
+
+async function getActivationSupportReplyMarkup(userId, merchant) {
+  const contacts = getMerchantSupportContacts(merchant);
+  const rows = [];
+  if (contacts.telegram) rows.push([{ text: await getText(userId, 'openTelegram'), url: contacts.telegram }]);
+  if (contacts.whatsapp) rows.push([{ text: await getText(userId, 'openWhatsApp'), url: contacts.whatsapp }]);
+  if (contacts.extraLabel && contacts.extraUrl) rows.push([{ text: await getText(userId, 'openExtraContact', { label: contacts.extraLabel }), url: contacts.extraUrl }]);
+  rows.push([{ text: await getText(userId, 'back'), callback_data: 'back_to_menu' }]);
+  return { inline_keyboard: rows };
+}
+
+async function sendActivationRequestToAdmin(userId, merchant, email, amount) {
+  const user = await User.findByPk(userId);
+  const timestamp = formatAdminDateTime(new Date());
+  const service = `${merchant.nameEn} / ${merchant.nameAr}`;
+  const text = `${await getText(ADMIN_ID, 'activationRequestAdminTitle')}\n\n${await getText(ADMIN_ID, 'activationRequestAdminBody', {
+    service,
+    name: user?.first_name || user?.username || '-',
+    username: user?.username ? `@${user.username}` : '-',
+    userId,
+    email,
+    amount: formatUsdPrice(amount),
+    time: timestamp
+  })}`;
+  const sent = await bot.sendMessage(ADMIN_ID, text, {
+    reply_markup: {
+      inline_keyboard: [[
+        { text: await getText(ADMIN_ID, 'activationApprove'), callback_data: `activation_approve_${merchant.id}_${userId}` },
+        { text: await getText(ADMIN_ID, 'activationReject'), callback_data: `activation_reject_${merchant.id}_${userId}` }
+      ]]
+    }
+  });
+  return { sent, timestamp };
+}
+
+async function createActivationRequestRecord(userId, merchant, email, amount, adminMessageId = null) {
+  return await ActivationRequest.create({
+    userId,
+    merchantId: merchant.id,
+    email,
+    chargedAmount: amount,
+    adminMessageId,
+    status: 'pending'
+  });
+}
+
+async function showDigitalProductSupportAdmin(userId, merchantId) {
+  const merchant = await Merchant.findByPk(merchantId);
+  if (!merchant) {
+    await bot.sendMessage(userId, await getText(userId, 'error'));
+    return;
+  }
+  const contacts = getMerchantSupportContacts(merchant);
+  const lines = [
+    await getText(userId, 'supportSettingsTitle', { name: `${merchant.nameEn} / ${merchant.nameAr}` }),
+    await getText(userId, 'currentSupportTelegram', { value: contacts.telegram || '-' }),
+    await getText(userId, 'currentSupportWhatsapp', { value: contacts.whatsapp || '-' }),
+    await getText(userId, 'currentSupportExtra', { value: contacts.extraLabel && contacts.extraUrl ? `${contacts.extraLabel} | ${contacts.extraUrl}` : '-' })
+  ];
+  await bot.sendMessage(userId, lines.join('\n\n'), {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: await getText(userId, 'setProductTelegramSupport'), callback_data: `admin_set_product_telegram_${merchant.id}` }],
+        [{ text: await getText(userId, 'setProductWhatsappSupport'), callback_data: `admin_set_product_whatsapp_${merchant.id}` }],
+        [{ text: await getText(userId, 'setProductExtraSupport'), callback_data: `admin_set_product_extra_${merchant.id}` }],
+        [{ text: await getText(userId, 'clearProductExtraSupport'), callback_data: `admin_clear_product_extra_${merchant.id}` }],
+        [{ text: await getText(userId, 'back'), callback_data: `admin_digital_product_${merchant.id}` }]
+      ]
+    }
+  });
+}
+
 async function showChatGptPurchaseInfo(userId) {
   const messageText = await buildChatGptPurchaseInfoText(userId);
   await bot.sendMessage(userId, messageText, {
@@ -2632,6 +2836,11 @@ async function showDigitalSectionAdmin(userId, sectionId) {
   const products = await getDigitalProductsForSection(section.id);
   const statusText = await getDigitalSectionStatusText(userId, section);
   const keyboard = [
+    [{ text: await getText(userId, section.isActive ? 'toggleSectionMainMenuHide' : 'toggleSectionMainMenuShow'), callback_data: `admin_toggle_digital_section_visibility_${section.id}` }],
+    [
+      { text: await getText(userId, 'moveUp'), callback_data: `admin_move_digital_section_up_${section.id}` },
+      { text: await getText(userId, 'moveDown'), callback_data: `admin_move_digital_section_down_${section.id}` }
+    ],
     [{ text: await getText(userId, 'addDigitalProductInSection', { name: sectionName }), callback_data: `admin_digital_add_product_${section.id}` }],
     [{ text: await getText(userId, 'editDigitalSectionName'), callback_data: `admin_edit_digital_section_${section.id}` }],
     [{ text: await getText(userId, 'deleteDigitalSection'), callback_data: `admin_delete_digital_section_${section.id}` }]
@@ -2692,6 +2901,7 @@ async function showDigitalProductAdmin(userId, merchantId) {
           [{ text: await getText(userId, 'editDigitalProductName'), callback_data: `admin_edit_digital_product_name_${merchant.id}` }],
           [{ text: await getText(userId, 'editDigitalProductPrice'), callback_data: `admin_edit_digital_product_price_${merchant.id}` }],
           [{ text: await getText(userId, 'editDigitalProductDescription'), callback_data: `admin_edit_digital_product_description_${merchant.id}` }],
+          [{ text: await getText(userId, 'contactSupportNow'), callback_data: `admin_product_support_${merchant.id}` }],
           [{ text: await getText(userId, 'deleteDigitalProduct'), callback_data: `admin_delete_digital_product_${merchant.id}` }],
           [{ text: await getText(userId, 'back'), callback_data: sectionId ? `admin_digital_section_${sectionId}` : 'admin_digital_subscriptions' }]
         ]
@@ -8617,6 +8827,43 @@ bot.on('callback_query', async query => {
       return;
     }
 
+    const activationApproveMatch = data.match(/^activation_approve_(\d+)_(\d+)$/);
+    if (activationApproveMatch && isAdmin(userId)) {
+      const merchantId = parseInt(activationApproveMatch[1], 10);
+      const targetUserId = parseInt(activationApproveMatch[2], 10);
+      const merchant = await Merchant.findByPk(merchantId);
+      const request = await ActivationRequest.findOne({ where: { merchantId, userId: targetUserId, status: 'pending' }, order: [['id', 'DESC']] });
+      if (merchant && request) {
+        request.status = 'activated';
+        request.activatedAt = new Date();
+        request.decidedAt = new Date();
+        await request.save();
+        await bot.sendMessage(targetUserId, await getText(targetUserId, 'activationDoneUser', { service: await getMerchantDisplayName(merchant, targetUserId), email: request.email }), { reply_markup: { inline_keyboard: [[{ text: await getText(targetUserId, 'back'), callback_data: 'back_to_menu' }]] } });
+        await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'activationApprove') });
+      } else {
+        await bot.answerCallbackQuery(query.id, { text: 'Not found' });
+      }
+      return;
+    }
+
+    const activationRejectMatch = data.match(/^activation_reject_(\d+)_(\d+)$/);
+    if (activationRejectMatch && isAdmin(userId)) {
+      const merchantId = parseInt(activationRejectMatch[1], 10);
+      const targetUserId = parseInt(activationRejectMatch[2], 10);
+      const merchant = await Merchant.findByPk(merchantId);
+      const request = await ActivationRequest.findOne({ where: { merchantId, userId: targetUserId, status: 'pending' }, order: [['id', 'DESC']] });
+      if (merchant && request) {
+        request.status = 'not_activated';
+        request.decidedAt = new Date();
+        await request.save();
+        await bot.sendMessage(targetUserId, await getText(targetUserId, 'activationRejectedUser', { service: await getMerchantDisplayName(merchant, targetUserId), email: request.email }), { reply_markup: await getActivationSupportReplyMarkup(targetUserId, merchant) });
+        await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'activationReject') });
+      } else {
+        await bot.answerCallbackQuery(query.id, { text: 'Not found' });
+      }
+      return;
+    }
+
     if (data.startsWith('support_close_user_') && isAdmin(userId)) {
       const targetUserId = parseInt(data.split('_')[3], 10);
       await closeSupportConversationForUser(targetUserId, 'admin', userId);
@@ -9818,6 +10065,34 @@ bot.on('callback_query', async query => {
       return;
     }
 
+    const toggleSectionVisibilityMatch = data.match(/^admin_toggle_digital_section_visibility_(\d+)$/);
+    if (toggleSectionVisibilityMatch && isAdmin(userId)) {
+      const sectionId = parseInt(toggleSectionVisibilityMatch[1], 10);
+      const section = await DigitalSection.findByPk(sectionId);
+      if (section) await setDigitalSectionVisibility(sectionId, !section.isActive);
+      await showDigitalSectionAdmin(userId, sectionId);
+      await bot.answerCallbackQuery(query.id);
+      return;
+    }
+
+    const moveDigitalSectionUpMatch = data.match(/^admin_move_digital_section_up_(\d+)$/);
+    if (moveDigitalSectionUpMatch && isAdmin(userId)) {
+      const sectionId = parseInt(moveDigitalSectionUpMatch[1], 10);
+      await moveDigitalSection(sectionId, 'up');
+      await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'sectionMovedUp') });
+      await showDigitalSectionAdmin(userId, sectionId);
+      return;
+    }
+
+    const moveDigitalSectionDownMatch = data.match(/^admin_move_digital_section_down_(\d+)$/);
+    if (moveDigitalSectionDownMatch && isAdmin(userId)) {
+      const sectionId = parseInt(moveDigitalSectionDownMatch[1], 10);
+      await moveDigitalSection(sectionId, 'down');
+      await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'sectionMovedDown') });
+      await showDigitalSectionAdmin(userId, sectionId);
+      return;
+    }
+
     if (data.startsWith('admin_digital_add_product_') && isAdmin(userId)) {
       const sectionId = parseInt(data.split('_')[4], 10);
       await setUserState(userId, { action: 'add_digital_product', sectionId, step: 'nameEn' });
@@ -9833,6 +10108,55 @@ bot.on('callback_query', async query => {
         await clearUserState(userId);
       }
       await showDigitalProductAdmin(userId, merchantId);
+      await bot.answerCallbackQuery(query.id);
+      return;
+    }
+
+    const productSupportMatch = data.match(/^admin_product_support_(\d+)$/);
+    if (productSupportMatch && isAdmin(userId)) {
+      const merchantId = parseInt(productSupportMatch[1], 10);
+      await showDigitalProductSupportAdmin(userId, merchantId);
+      await bot.answerCallbackQuery(query.id);
+      return;
+    }
+
+    const setProductTelegramMatch = data.match(/^admin_set_product_telegram_(\d+)$/);
+    if (setProductTelegramMatch && isAdmin(userId)) {
+      const merchantId = parseInt(setProductTelegramMatch[1], 10);
+      await setUserState(userId, { action: 'set_product_support_contact', merchantId, field: 'telegram' });
+      await bot.sendMessage(userId, await getText(userId, 'askProductTelegramSupport'));
+      await bot.answerCallbackQuery(query.id);
+      return;
+    }
+
+    const setProductWhatsappMatch = data.match(/^admin_set_product_whatsapp_(\d+)$/);
+    if (setProductWhatsappMatch && isAdmin(userId)) {
+      const merchantId = parseInt(setProductWhatsappMatch[1], 10);
+      await setUserState(userId, { action: 'set_product_support_contact', merchantId, field: 'whatsapp' });
+      await bot.sendMessage(userId, await getText(userId, 'askProductWhatsappSupport'));
+      await bot.answerCallbackQuery(query.id);
+      return;
+    }
+
+    const setProductExtraMatch = data.match(/^admin_set_product_extra_(\d+)$/);
+    if (setProductExtraMatch && isAdmin(userId)) {
+      const merchantId = parseInt(setProductExtraMatch[1], 10);
+      await setUserState(userId, { action: 'set_product_support_contact', merchantId, field: 'extra' });
+      await bot.sendMessage(userId, await getText(userId, 'askProductExtraSupport'));
+      await bot.answerCallbackQuery(query.id);
+      return;
+    }
+
+    const clearProductExtraMatch = data.match(/^admin_clear_product_extra_(\d+)$/);
+    if (clearProductExtraMatch && isAdmin(userId)) {
+      const merchantId = parseInt(clearProductExtraMatch[1], 10);
+      const merchant = await Merchant.findByPk(merchantId);
+      if (merchant) {
+        setMerchantMetaConfig(merchant, { supportExtraLabel: '', supportExtraUrl: '' });
+        await merchant.save();
+      }
+      await bot.sendMessage(userId, await getText(userId, 'supportSettingsCleared'));
+      await showDigitalProductSupportAdmin(userId, merchantId);
       await bot.answerCallbackQuery(query.id);
       return;
     }
@@ -10054,9 +10378,28 @@ bot.on('callback_query', async query => {
     if (data.startsWith('digital_buy_')) {
       const merchantId = parseInt(data.split('_')[2], 10);
       const merchant = await Merchant.findByPk(merchantId);
+      if (!merchant) {
+        await bot.sendMessage(userId, await getText(userId, 'error'));
+        await cleanupPressedMessage();
+        await bot.answerCallbackQuery(query.id);
+        return;
+      }
+
+      if (await isEmailActivationProduct(merchant)) {
+        await setUserState(userId, { action: 'digital_email_activation_purchase', merchantId });
+        await bot.sendMessage(userId, `${await getText(userId, 'askSubscriptionEmail')}
+${await getText(userId, 'itemPriceLine', { price: formatUsdPrice(merchant.price) })}
+${await getCurrentBalanceLineText(userId)}`, {
+          reply_markup: await getBackAndCancelReplyMarkup(userId, `digital_product_${merchant.id}`)
+        });
+        await cleanupPressedMessage();
+        await bot.answerCallbackQuery(query.id);
+        return;
+      }
+
       const available = await getMerchantAvailableStock(merchantId);
 
-      if (!merchant || !available) {
+      if (!available) {
         await bot.sendMessage(userId, await getText(userId, 'noCodes'));
         await sendMainMenu(userId);
         await cleanupPressedMessage();
@@ -10722,8 +11065,8 @@ bot.on('message', async msg => {
             nameAr: state.nameAr,
             price: state.price,
             category: getDigitalSectionCategory(state.sectionId),
-            type: state.selectedType || 'bulk',
-            description
+            type: state.selectedType || 'single',
+            description: description && typeof description === 'object' ? { ...description, meta: { ...(description.meta || {}), requiresEmailActivation: true } } : { type: 'text', content: '', meta: { requiresEmailActivation: true } }
           });
 
           await bot.sendMessage(userId, await getText(userId, 'digitalProductCreated', { id: merchant.id }));
@@ -11858,6 +12201,70 @@ bot.on('message', async msg => {
         await clearUserState(userId);
       }
       await sendMainMenu(userId);
+      return;
+    }
+
+    if (state?.action === 'set_product_support_contact' && isAdmin(userId)) {
+      const merchant = await Merchant.findByPk(state.merchantId);
+      if (!merchant) {
+        await bot.sendMessage(userId, await getText(userId, 'error'));
+        await clearUserState(userId);
+        return;
+      }
+      const trimmed = String(text || '').trim();
+      if (!trimmed) return;
+      if (state.field === 'telegram') {
+        setMerchantMetaConfig(merchant, { supportTelegram: normalizeTelegramUrl(trimmed) });
+      } else if (state.field === 'whatsapp') {
+        setMerchantMetaConfig(merchant, { supportWhatsapp: normalizeWhatsappUrl(trimmed) });
+      } else if (state.field === 'extra') {
+        const parts = trimmed.split('|').map(v => v.trim());
+        if (parts.length < 2 || !parts[0] || !parts[1]) {
+          await bot.sendMessage(userId, await getText(userId, 'askProductExtraSupport'));
+          return;
+        }
+        setMerchantMetaConfig(merchant, { supportExtraLabel: parts[0], supportExtraUrl: parts.slice(1).join(' | ') });
+      }
+      await merchant.save();
+      await clearUserState(userId);
+      await bot.sendMessage(userId, await getText(userId, 'supportSettingsUpdated'));
+      await showDigitalProductSupportAdmin(userId, merchant.id);
+      return;
+    }
+
+    if (state?.action === 'digital_email_activation_purchase') {
+      const merchant = await Merchant.findByPk(state.merchantId);
+      const email = String(text || '').trim();
+      if (!merchant) {
+        await bot.sendMessage(userId, await getText(userId, 'error'));
+        await clearUserState(userId);
+        return;
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        await bot.sendMessage(userId, await getText(userId, 'invalidEmail'));
+        return;
+      }
+      const amount = parseFloat(merchant.price || 0) || 0;
+      const balance = await getUserBalanceValue(userId);
+      if (balance < amount) {
+        await bot.sendMessage(userId, await getText(userId, 'insufficientBalance', { balance: balance.toFixed(2), price: amount.toFixed(2), needed: amount.toFixed(2) }), { reply_markup: { inline_keyboard: [[{ text: await getText(userId, 'depositNow'), callback_data: 'deposit' }]] } });
+        return;
+      }
+      const t = await sequelize.transaction();
+      try {
+        await User.update({ balance: balance - amount }, { where: { id: userId }, transaction: t });
+        await BalanceTransaction.create({ userId, amount: -amount, type: 'digital_activation_purchase', status: 'completed' }, { transaction: t });
+        await t.commit();
+      } catch (err) {
+        await t.rollback().catch(() => {});
+        console.error('digital_email_activation_purchase error:', err);
+        await bot.sendMessage(userId, await getText(userId, 'error'));
+        return;
+      }
+      const adminNotice = await sendActivationRequestToAdmin(userId, merchant, email, amount);
+      await createActivationRequestRecord(userId, merchant, email, amount, adminNotice?.sent?.message_id || null);
+      await bot.sendMessage(userId, await getText(userId, 'activationRequestSent', { service: await getMerchantDisplayName(merchant, userId), email, amount: formatUsdPrice(amount), time: adminNotice.timestamp }), { reply_markup: { inline_keyboard: [[{ text: await getText(userId, 'back'), callback_data: 'back_to_menu' }]] } });
+      await clearUserState(userId);
       return;
     }
 
