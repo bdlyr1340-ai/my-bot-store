@@ -1521,18 +1521,22 @@ Object.assign(DEFAULT_TEXTS.ar, {
 Object.assign(DEFAULT_TEXTS.en, {
   activationRefundButton: '💸 Refund money',
   activationRefundNoCharge: '✅ No amount was deducted from your balance, so nothing needs to be refunded.',
+  activationRefundDone: '✅ Your money was refunded successfully.',
   activationApprovedChargeFailedUser: '❌ Your request was approved, but your balance is no longer enough to complete activation. Please recharge and contact support.',
   activationApprovedChargeFailedAdmin: '❌ Activation cannot be completed because the user balance is no longer enough.',
   activationSupportAfterDone: '📞 Contact support',
+  refundedAmountLine: '💰 Refunded amount: {amount} USD',
   priceInlineLabel: '{name} - {price} USD'
 });
 
 Object.assign(DEFAULT_TEXTS.ar, {
   activationRefundButton: '💸 استرجاع الاموال',
   activationRefundNoCharge: '✅ لم يتم خصم أي مبلغ من رصيدك، لذلك لا حاجة للاسترجاع.',
+  activationRefundDone: '✅ تم استرجاع الاموال بنجاح',
   activationApprovedChargeFailedUser: '❌ تمت الموافقة على طلبك لكن رصيدك الحالي لم يعد كافياً لإكمال التفعيل. يرجى الشحن ثم التواصل مع الدعم.',
   activationApprovedChargeFailedAdmin: '❌ لا يمكن إكمال التفعيل لأن رصيد المستخدم الحالي لم يعد كافياً.',
   activationSupportAfterDone: '📞 تواصل مع الدعم',
+  refundedAmountLine: '💰 الاموال المسترجعة: {amount} دولار',
   priceInlineLabel: '{name} - {price} دولار'
 });
 
@@ -1605,6 +1609,50 @@ async function safePinChatMessage(chatId, messageId) {
   } catch {
     return false;
   }
+}
+
+async function safeUnpinChatMessage(chatId, messageId) {
+  if (!chatId) return false;
+  try {
+    if (messageId) {
+      await bot.unpinChatMessage(chatId, messageId);
+    } else {
+      await bot.unpinChatMessage(chatId);
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function safeClearInlineKeyboard(chatId, messageId) {
+  if (!chatId || !messageId) return false;
+  try {
+    await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: messageId });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function getActivationRequestMeta(request) {
+  const notes = String(request?.notes || '');
+  const read = key => {
+    const match = notes.match(new RegExp(`${key}:(\d+)`));
+    return match ? parseInt(match[1], 10) : null;
+  };
+  return {
+    userPinnedMessageId: read('user_pin_message_id'),
+    adminPinnedMessageId: read('admin_pin_message_id')
+  };
+}
+
+function appendActivationRequestNote(request, note) {
+  const current = String(request?.notes || '').trim();
+  const normalized = String(note || '').trim();
+  if (!normalized || current.includes(normalized)) return current;
+  request.notes = [current, normalized].filter(Boolean).join(' | ');
+  return request.notes;
 }
 
 function shouldAutoDeleteIncomingMessage(msg, state, admin = false) {
@@ -2625,7 +2673,17 @@ async function getActivationRejectedReplyMarkup(userId, merchant, requestId) {
   if (contacts.telegram) rows.push([{ text: await getText(userId, 'openTelegram'), url: contacts.telegram }]);
   if (contacts.whatsapp) rows.push([{ text: await getText(userId, 'openWhatsApp'), url: contacts.whatsapp }]);
   if (contacts.extraLabel && contacts.extraUrl) rows.push([{ text: await getText(userId, 'openExtraContact', { label: contacts.extraLabel }), url: contacts.extraUrl }]);
-  rows.push([{ text: await getText(userId, 'back'), callback_data: 'back_to_menu' }]);
+  rows.push([{ text: await getText(userId, 'cancel'), callback_data: 'cancel_action' }]);
+  return { inline_keyboard: rows };
+}
+
+async function getActivationRefundReplyMarkup(userId, merchant) {
+  const contacts = getMerchantSupportContacts(merchant);
+  const rows = [];
+  if (contacts.telegram) rows.push([{ text: await getText(userId, 'openTelegram'), url: contacts.telegram }]);
+  if (contacts.whatsapp) rows.push([{ text: await getText(userId, 'openWhatsApp'), url: contacts.whatsapp }]);
+  if (contacts.extraLabel && contacts.extraUrl) rows.push([{ text: await getText(userId, 'openExtraContact', { label: contacts.extraLabel }), url: contacts.extraUrl }]);
+  rows.push([{ text: await getText(userId, 'cancel'), callback_data: 'cancel_action' }]);
   return { inline_keyboard: rows };
 }
 
@@ -2715,7 +2773,9 @@ async function sendActivationRequestToAdmin(userId, merchant, email, amount) {
   const user = await User.findByPk(userId);
   const timestamp = formatAdminDateTime(new Date());
   const service = `${merchant.nameEn} / ${merchant.nameAr}`;
-  const text = `${await getText(ADMIN_ID, 'activationRequestAdminTitle')}\n\n${await getText(ADMIN_ID, 'activationRequestAdminBody', {
+  const text = `${await getText(ADMIN_ID, 'activationRequestAdminTitle')}
+
+${await getText(ADMIN_ID, 'activationRequestAdminBody', {
     service,
     name: user?.first_name || user?.username || '-',
     username: user?.username ? `@${user.username}` : '-',
@@ -2733,11 +2793,17 @@ async function sendActivationRequestToAdmin(userId, merchant, email, amount) {
         ],
         [
           { text: await getText(ADMIN_ID, 'activationDelayShort'), callback_data: `activation_delaypick_${merchant.id}_${userId}` }
+        ],
+        [
+          { text: await getText(ADMIN_ID, 'cancel'), callback_data: 'cancel_action' }
         ]
       ]
     }
   });
-  return { sent, timestamp };
+  if (sent?.message_id) {
+    await safePinChatMessage(ADMIN_ID, sent.message_id);
+  }
+  return { sent, timestamp, adminPinnedMessageId: sent?.message_id || null };
 }
 
 async function createActivationRequestRecord(userId, merchant, email, amount, adminMessageId = null) {
@@ -8975,8 +9041,8 @@ bot.on('callback_query', async query => {
     }
 
     if (data === 'support_close') {
+      await safeClearInlineKeyboard(query.message.chat.id, query.message.message_id);
       await closeSupportConversationForUser(userId, 'user', ADMIN_ID);
-      await cleanupPressedMessage();
       await bot.answerCallbackQuery(query.id);
       return;
     }
@@ -9258,7 +9324,8 @@ bot.on('callback_query', async query => {
       } else {
         await bot.answerCallbackQuery(query.id, { text: 'Not found' });
       }
-
+      return;
+    }
 
     const activationRefundMatch = data.match(/^activation_refund_(\d+)$/);
     if (activationRefundMatch) {
@@ -9268,16 +9335,21 @@ bot.on('callback_query', async query => {
         await bot.answerCallbackQuery(query.id);
         return;
       }
-      if (String(request.notes || '').includes('charged_on_activation') && request.status !== 'refunded') {
-        const amount = Number(request.chargedAmount || 0);
+      const merchant = await Merchant.findByPk(request.merchantId);
+      const meta = getActivationRequestMeta(request);
+      const wasCharged = String(request.notes || '').includes('charged_on_activation');
+      let refundedAmount = 0;
+
+      if (wasCharged && request.status !== 'refunded') {
+        refundedAmount = Number(request.chargedAmount || 0);
         const userRow = await User.findByPk(userId);
         const currentBalance = Number(userRow?.balance || 0);
         const t = await sequelize.transaction();
         try {
-          await User.update({ balance: currentBalance + amount }, { where: { id: userId }, transaction: t });
-          await BalanceTransaction.create({ userId, amount, type: 'digital_activation_refund', status: 'completed' }, { transaction: t });
+          await User.update({ balance: currentBalance + refundedAmount }, { where: { id: userId }, transaction: t });
+          await BalanceTransaction.create({ userId, amount: refundedAmount, type: 'digital_activation_refund', status: 'completed' }, { transaction: t });
           request.status = 'refunded';
-          request.notes = [String(request.notes || '').trim(), 'refunded_after_reject'].filter(Boolean).join(' | ');
+          appendActivationRequestNote(request, 'refunded_after_reject');
           request.decidedAt = new Date();
           await request.save({ transaction: t });
           await t.commit();
@@ -9288,15 +9360,27 @@ bot.on('callback_query', async query => {
           return;
         }
       }
-      await bot.sendMessage(userId, await getText(userId, 'activationRefundNoCharge'));
+
+      if (meta.userPinnedMessageId) await safeUnpinChatMessage(userId, meta.userPinnedMessageId);
+      if (meta.adminPinnedMessageId) await safeUnpinChatMessage(ADMIN_ID, meta.adminPinnedMessageId);
+      if (request.adminMessageId) await safeClearInlineKeyboard(ADMIN_ID, request.adminMessageId);
+      await safeClearInlineKeyboard(query.message.chat.id, query.message.message_id);
+
+      const replyText = refundedAmount > 0
+        ? `${await getText(userId, 'activationRefundDone')}
+${await getText(userId, 'refundedAmountLine', { amount: formatUsdPrice(refundedAmount) })}`
+        : await getText(userId, 'activationRefundNoCharge');
+
+      await bot.sendMessage(userId, replyText, {
+        reply_markup: await getActivationRefundReplyMarkup(userId, merchant || { description: {} })
+      });
       await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'activationRefundButton') });
-      return;
-    }
       return;
     }
 
     if (data.startsWith('support_close_user_') && isAdmin(userId)) {
       const targetUserId = parseInt(data.split('_')[3], 10);
+      await safeClearInlineKeyboard(query.message.chat.id, query.message.message_id);
       await closeSupportConversationForUser(targetUserId, 'admin', userId);
       await bot.answerCallbackQuery(query.id);
       return;
@@ -12793,10 +12877,14 @@ bot.on('message', async msg => {
       }
       const requestRecord = await createActivationRequestRecord(userId, merchant, email, amount, null);
       const adminNotice = await sendActivationRequestToAdmin(userId, merchant, email, amount, requestRecord);
-      const sentUserActivation = await bot.sendMessage(userId, await getText(userId, 'activationProcessingSoon', { service: await getMerchantDisplayName(merchant, userId), email, amount: formatUsdPrice(amount), time: adminNotice.timestamp }), { reply_markup: { inline_keyboard: [[{ text: await getText(userId, 'back'), callback_data: 'back_to_menu' }]] } });
+      const sentUserActivation = await bot.sendMessage(userId, await getText(userId, 'activationProcessingSoon', { service: await getMerchantDisplayName(merchant, userId), email, amount: formatUsdPrice(amount), time: adminNotice.timestamp }), { reply_markup: { inline_keyboard: [[{ text: await getText(userId, 'back'), callback_data: 'back_to_menu' }], [{ text: await getText(userId, 'cancel'), callback_data: 'cancel_action' }]] } });
       if (sentUserActivation?.message_id) {
         await safePinChatMessage(userId, sentUserActivation.message_id);
       }
+      requestRecord.adminMessageId = adminNotice.sent?.message_id || null;
+      appendActivationRequestNote(requestRecord, `admin_pin_message_id:${adminNotice.adminPinnedMessageId || 0}`);
+      appendActivationRequestNote(requestRecord, `user_pin_message_id:${sentUserActivation?.message_id || 0}`);
+      await requestRecord.save();
       await clearUserState(userId);
       return;
     }
