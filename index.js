@@ -25,6 +25,7 @@ const BINANCE_PAY_PENDING_POLL_INTERVAL_MS = Math.max(30 * 1000, parseInt(proces
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || process.env.OPENAI_KEY || '';
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 const OPENAI_BASE_URL = String(process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '');
+const APP_TIMEZONE = String(process.env.APP_TIMEZONE || 'Asia/Baghdad');
 
 if (!TOKEN || Number.isNaN(ADMIN_ID) || !DATABASE_URL) {
   console.error('❌ Missing required environment variables');
@@ -328,7 +329,7 @@ const DEFAULT_TEXTS = {
     botAdded: '✅ Bot added!',
     botRemoved: '❌ Bot removed!',
     chooseCurrency: '💱 Choose currency for deposit:',
-    currency_usd_name: 'Binance',
+    currency_usd_name: 'Dollar',
     currency_iqd_name: 'Iraqi Dinar',
     depositInstructionsUSD: '💰 Send {amount} USDT to one of the following payment methods:\n\n{methods_block}\n\nThen send a screenshot of the payment with any message.\n\n{instructions}',
     depositInstructionsIQD: '💰 Send {amountIQD} Iraqi Dinar (≈ {amountUSD} USD at rate {rate} IQD/USD) to one of the following payment methods:\n\n{methods_block}\n\nThen send a screenshot of the payment with any message.\n\n{instructions}',
@@ -569,7 +570,7 @@ const DEFAULT_TEXTS = {
     enterInstructions: 'Send deposit instructions (text):',
     enterNewCurrencyName: 'Send new currency name:',
     manageIQDMethods: 'Manage Iraqi Dinar Methods',
-    manageUSDMethods: 'Manage Binance Methods',
+    manageUSDMethods: 'Manage dollar payment methods',
     addDepositMethod: 'Add Payment Method',
     deleteDepositMethod: 'Delete Payment Method',
     editDepositTemplates: 'Edit Deposit Messages',
@@ -699,7 +700,7 @@ const DEFAULT_TEXTS = {
     botAdded: '✅ تمت إضافة البوت!',
     botRemoved: '❌ تم حذف البوت!',
     chooseCurrency: '💱 اختر العملة للشحن:',
-    currency_usd_name: 'بايننس',
+    currency_usd_name: 'دولار',
     currency_iqd_name: 'دينار عراقي',
     depositInstructionsUSD: '💰 قم بإرسال {amount} USDT إلى إحدى طرق الدفع التالية:\n\n{methods_block}\n\nثم أرسل صورة التحويل مع أي رسالة.\n\n{instructions}',
     depositInstructionsIQD: '💰 قم بإرسال {amountIQD} دينار عراقي (≈ {amountUSD} دولار بسعر صرف {rate} دينار/دولار) إلى إحدى طرق الدفع التالية:\n\n{methods_block}\n\nثم أرسل صورة التحويل مع أي رسالة.\n\n{instructions}',
@@ -1190,6 +1191,42 @@ Object.assign(DEFAULT_TEXTS.ar, {
   supportThreadAdminNotice: '📩 رسالة دعم مباشرة\n\nالمعرف: {username}\nالاسم: {name}\nايدي المستخدم: {userId}\n\nالرسالة: {message}',
   digitalStockInputPrompt: 'أرسل الآن المخزون/الحسابات.\n\nالصيغ السريعة المدعومة:\nemail|password\nemail | password\nemail|password|verification\nemail|password|verification|ملاحظة إضافية\n\nويمكنك أيضاً استخدام زر «إضافة إيميل وباسورد» لإضافة حساب واحد خطوة بخطوة.',
   digitalProductListButton: '{name} - {price} دولار | يوجد {stock}'
+});
+
+Object.assign(DEFAULT_TEXTS.en, {
+  chooseDepositMethodType: '⚡ Choose the payment method for deposit:',
+  chooseDepositAmountForMethod: '⚡ Choose the deposit amount via {method}:',
+  depositMethodInstructionsUSD: '⚡ <b>Deposit via {method}</b>\n\n💵 Amount: <b>{amountUSD}$</b>\n📌 Payment details:\n<code>{details}</code>\n🕒 Order time: <b>{time}</b>\n\nAfter paying, press the Done button below.',
+  depositMethodInstructionsIQD: '⚡ <b>Deposit via {method}</b>\n\n💵 Amount: <b>{amountUSD}$</b>\n🇮🇶 Amount to send: <b>{amountIQD}</b> IQD\n💱 Rate: <b>{rate}</b> IQD per 1 USD\n📌 Payment details:\n<code>{details}</code>\n🕒 Order time: <b>{time}</b>\n\nAfter paying, press the Done button below.',
+  donePayment: '✅ Done',
+  depositSendProofNow: '📸 Send the payment proof now for {method}. You can send a screenshot, photo, video, or a written note.',
+  depositProofRequired: '❌ Please send the payment proof now.',
+  depositTapDoneFirst: '✅ After you pay, press the Done button first, then send the proof.',
+  binanceRemoved: '⛔ Binance payment has been removed from this version.',
+  enterMethodTypePrompt: 'Send the payment method type: manual',
+  enterMethodTypeInvalid: '❌ The method type must be manual.',
+  depositLimitsUpdated: '✅ Deposit limits updated. Minimum: {min}$ | Maximum: {max}$',
+  methodNotFound: '❌ Payment method not found.',
+  manageUSDMethods: 'Manage dollar payment methods',
+  paymentMethods: '💳 Payment Methods'
+});
+
+Object.assign(DEFAULT_TEXTS.ar, {
+  chooseDepositMethodType: '⚡ اختر طريقة الدفع للشحن:',
+  chooseDepositAmountForMethod: '⚡ اختر مبلغ الشحن عبر {method}:',
+  depositMethodInstructionsUSD: '⚡ <b>الشحن عبر {method}</b>\n\n💵 المبلغ: <b>{amountUSD}$</b>\n📌 معلومات الدفع:\n<code>{details}</code>\n🕒 وقت الطلب: <b>{time}</b>\n\nبعد الدفع اضغط زر تم بالأسفل.',
+  depositMethodInstructionsIQD: '⚡ <b>الشحن عبر {method}</b>\n\n💵 المبلغ: <b>{amountUSD}$</b>\n🇮🇶 المبلغ المطلوب إرساله: <b>{amountIQD}</b> دينار\n💱 سعر الصرف: <b>{rate}</b> دينار لكل 1 دولار\n📌 معلومات الدفع:\n<code>{details}</code>\n🕒 وقت الطلب: <b>{time}</b>\n\nبعد الدفع اضغط زر تم بالأسفل.',
+  donePayment: '✅ تم',
+  depositSendProofNow: '📸 أرسل إثبات الدفع الآن لطريقة {method}. يمكنك إرسال صورة أو فيديو أو ملاحظة مكتوبة.',
+  depositProofRequired: '❌ أرسل إثبات الدفع الآن.',
+  depositTapDoneFirst: '✅ بعد أن تدفع اضغط أولاً على زر تم ثم أرسل الإثبات.',
+  binanceRemoved: '⛔ تم حذف طريقة دفع بايننس من هذه النسخة.',
+  enterMethodTypePrompt: 'أرسل نوع طريقة الدفع: manual',
+  enterMethodTypeInvalid: '❌ نوع الطريقة يجب أن يكون manual فقط.',
+  depositLimitsUpdated: '✅ تم تحديث حدود الشحن. الحد الأدنى: {min}$ | الحد الأعلى: {max}$',
+  methodNotFound: '❌ طريقة الدفع غير موجودة.',
+  manageUSDMethods: 'إدارة طرق الدفع بالدولار',
+  paymentMethods: '💳 طرق الدفع'
 });
 
 Object.assign(DEFAULT_TEXTS.en, {
@@ -4034,15 +4071,43 @@ function extractChatGptUpLinks(rawText) {
   return [...new Set(matches)];
 }
 
-function formatDateParts(date) {
+function formatDateParts(date, timeZone = APP_TIMEZONE) {
   const d = new Date(date);
+  if (Number.isNaN(d.getTime())) {
+    return {
+      year: '0000',
+      month: '00',
+      day: '00',
+      hour: '00',
+      minute: '00',
+      second: '00'
+    };
+  }
+
+  const formatter = new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  });
+
+  const parts = Object.fromEntries(
+    formatter.formatToParts(d)
+      .filter(part => part.type !== 'literal')
+      .map(part => [part.type, part.value])
+  );
+
   return {
-    year: d.getFullYear(),
-    month: String(d.getMonth() + 1).padStart(2, '0'),
-    day: String(d.getDate()).padStart(2, '0'),
-    hour: String(d.getHours()).padStart(2, '0'),
-    minute: String(d.getMinutes()).padStart(2, '0'),
-    second: String(d.getSeconds()).padStart(2, '0')
+    year: parts.year || '0000',
+    month: parts.month || '00',
+    day: parts.day || '00',
+    hour: parts.hour || '00',
+    minute: parts.minute || '00',
+    second: parts.second || '00'
   };
 }
 
@@ -4988,8 +5053,8 @@ function getDefaultDepositValues(currency) {
       rate: 1,
       walletAddress: 'T...',
       instructions: 'Send USDT to one of the payment methods above.',
-      displayNameEn: 'Binance',
-      displayNameAr: 'بايننس',
+      displayNameEn: 'Dollar',
+      displayNameAr: 'دولار',
       templateEn: '💰 Send {amount} USDT to one of the following payment methods:\n\n{methods_block}\n\nThen send a screenshot of the payment with any message.\n\n{instructions}',
       templateAr: '💰 قم بإرسال {amount} USDT إلى إحدى طرق الدفع التالية:\n\n{methods_block}\n\nثم أرسل صورة التحويل مع أي رسالة.\n\n{instructions}',
       methods: [{ nameAr: 'بايننس', nameEn: 'Binance', value: '123456' }]
@@ -4999,7 +5064,7 @@ function getDefaultDepositValues(currency) {
     currency: 'IQD',
     rate: 1500,
     walletAddress: 'SuperKey...',
-    instructions: 'Send IQD to one of the payment methods above.',
+    instructions: 'Complete the transfer using the selected payment method.',
     displayNameEn: 'Iraqi Dinar',
     displayNameAr: 'دينار عراقي',
     templateEn: '💰 Send {amountIQD} Iraqi Dinar (≈ {amountUSD} USD at rate {rate} IQD/USD) to one of the following payment methods:\n\n{methods_block}\n\nThen send a screenshot of the payment with any message.\n\n{instructions}',
@@ -5187,12 +5252,17 @@ async function showDepositMethodsAdmin(userId, currency) {
   const config = await getDepositConfig(currency);
   const methods = normalizeDepositMethods(config.methods);
   const title = currency === 'IQD' ? await getText(userId, 'manageIQDMethods') : await getText(userId, 'manageUSDMethods');
+  const user = await User.findByPk(userId);
+  const lang = user?.lang === 'ar' ? 'ar' : 'en';
 
   let msg = `💳 *${title}*\n\n`;
   if (methods.length === 0) {
     msg += await getText(userId, 'noMethods');
   } else {
-    msg += methods.map((m, i) => `${i + 1}. ${m.nameAr || m.nameEn} / ${m.nameEn || m.nameAr}\n\`${m.value}\``).join('\n\n');
+    msg += methods.map((m, i) => {
+      const methodName = lang === 'ar' ? (m.nameAr || m.nameEn) : (m.nameEn || m.nameAr);
+      return `${i + 1}. ${methodName}\n\`${m.value}\``;
+    }).join('\n\n');
   }
 
   const keyboard = {
@@ -5209,7 +5279,12 @@ async function showDepositMethodsAdmin(userId, currency) {
 async function showDeleteDepositMethodsMenu(userId, currency) {
   const config = await getDepositConfig(currency);
   const methods = normalizeDepositMethods(config.methods);
-  const buttons = methods.map((m, i) => [{ text: `${m.nameAr || m.nameEn} / ${m.nameEn || m.nameAr}`, callback_data: `admin_confirm_delete_deposit_method_${currency}_${i}` }]);
+  const user = await User.findByPk(userId);
+  const lang = user?.lang === 'ar' ? 'ar' : 'en';
+  const buttons = methods.map((m, i) => [{
+    text: lang === 'ar' ? (m.nameAr || m.nameEn) : (m.nameEn || m.nameAr),
+    callback_data: `admin_confirm_delete_deposit_method_${currency}_${i}`
+  }]);
   buttons.push([{ text: await getText(userId, 'back'), callback_data: currency === 'IQD' ? 'admin_manage_iqd_methods' : 'admin_manage_usd_methods' }]);
   await bot.sendMessage(userId, await getText(userId, 'deleteDepositMethod'), { reply_markup: { inline_keyboard: buttons } });
 }
@@ -5238,15 +5313,20 @@ async function deleteDepositMethod(currency, index) {
 
 const DEFAULT_DEPOSIT_OPTION_VISIBILITY = {
   IQD: true,
-  USD: true,
-  BINANCE_AUTO: true
+  USD: true
 };
+
+const DEPOSIT_PRESET_AMOUNTS = [1, 3, 5, 7, 10, 15, 20, 30];
 
 async function getDepositOptionVisibility() {
   const setting = await Setting.findOne({ where: { key: 'deposit_option_visibility', lang: 'global' } });
   if (!setting) return { ...DEFAULT_DEPOSIT_OPTION_VISIBILITY };
   try {
-    return { ...DEFAULT_DEPOSIT_OPTION_VISIBILITY, ...JSON.parse(setting.value) };
+    const parsed = JSON.parse(setting.value);
+    return {
+      IQD: parsed?.IQD !== false,
+      USD: parsed?.USD !== false
+    };
   } catch {
     return { ...DEFAULT_DEPOSIT_OPTION_VISIBILITY };
   }
@@ -5256,7 +5336,10 @@ async function setDepositOptionVisibility(visibility) {
   await Setting.upsert({
     key: 'deposit_option_visibility',
     lang: 'global',
-    value: JSON.stringify(visibility)
+    value: JSON.stringify({
+      IQD: visibility?.IQD !== false,
+      USD: visibility?.USD !== false
+    })
   });
 }
 
@@ -5266,20 +5349,51 @@ async function showDepositOptionsAdmin(userId) {
     inline_keyboard: [
       [{ text: `${visibility.IQD ? '✅' : '❌'} ${await getText(userId, 'depositOptionIQD')}`, callback_data: 'admin_toggle_deposit_option_IQD' }],
       [{ text: `${visibility.USD ? '✅' : '❌'} ${await getText(userId, 'depositOptionUSD')}`, callback_data: 'admin_toggle_deposit_option_USD' }],
-      [{ text: `${visibility.BINANCE_AUTO ? '✅' : '❌'} ${await getText(userId, 'depositOptionBinanceAuto')}`, callback_data: 'admin_toggle_deposit_option_BINANCE_AUTO' }],
       [{ text: await getText(userId, 'back'), callback_data: 'admin_manage_deposit_settings' }]
     ]
   };
   await bot.sendMessage(userId, await getText(userId, 'manageDepositOptions'), { reply_markup: keyboard });
 }
 
+async function getDepositMethodByIndex(currency, index) {
+  const config = await getDepositConfig(currency);
+  const methods = normalizeDepositMethods(config.methods);
+  const safeIndex = parseInt(index, 10);
+  if (!Number.isInteger(safeIndex) || safeIndex < 0 || safeIndex >= methods.length) return null;
+  return { config, method: methods[safeIndex], index: safeIndex };
+}
+
+async function getDepositMethodNameForUser(userId, currency, index) {
+  const user = await User.findByPk(userId);
+  const lang = user?.lang === 'ar' ? 'ar' : 'en';
+  const selected = await getDepositMethodByIndex(currency, index);
+  if (!selected?.method) return '';
+  return lang === 'ar'
+    ? (selected.method.nameAr || selected.method.nameEn || '')
+    : (selected.method.nameEn || selected.method.nameAr || '');
+}
+
 async function showCurrencyOptions(userId) {
   const visibility = await getDepositOptionVisibility();
   const rows = [];
 
-  if (visibility.IQD !== false) rows.push([{ text: `💳 ${await getDepositDisplayName(userId, 'IQD')}`, callback_data: 'deposit_currency_iqd' }]);
-  if (visibility.USD !== false) rows.push([{ text: `💳 ${await getDepositDisplayName(userId, 'USD')}`, callback_data: 'deposit_currency_usd' }]);
-  if (visibility.BINANCE_AUTO !== false) rows.push([{ text: '⚡ Binance Pay (USDT)', callback_data: 'deposit_binance_auto' }]);
+  for (const currency of ['IQD', 'USD']) {
+    if (visibility[currency] === false) continue;
+    const config = await getDepositConfig(currency);
+    const methods = normalizeDepositMethods(config.methods);
+    for (let i = 0; i < methods.length; i += 1) {
+      const methodName = await getDepositMethodNameForUser(userId, currency, i);
+      if (!methodName) continue;
+      rows.push([{ text: `💳 ${methodName}`, callback_data: `deposit_pick_${currency}_${i}` }]);
+    }
+  }
+
+  if (!rows.length) {
+    await bot.sendMessage(userId, await getText(userId, 'noMethods'), {
+      reply_markup: { inline_keyboard: [[{ text: await getText(userId, 'back'), callback_data: 'back_to_menu' }]] }
+    });
+    return;
+  }
 
   rows.push([{ text: await getText(userId, 'back'), callback_data: 'back_to_menu' }]);
 
@@ -5288,87 +5402,80 @@ async function showCurrencyOptions(userId) {
   });
 }
 
-async function showBinanceAutoAmountOptions(userId) {
-  const user = await User.findByPk(userId);
-  const lang = user?.lang || 'en';
-  const amounts = [1, 5, 10, 20, 35];
-  const buttons = amounts.map(amount => ([{ text: `${amount}$`, callback_data: `deposit_binance_amount_${amount}` }]));
+async function showDepositAmountOptionsForMethod(userId, currency, index) {
+  const methodName = await getDepositMethodNameForUser(userId, currency, index);
+  if (!methodName) {
+    await bot.sendMessage(userId, await getText(userId, 'error'));
+    return;
+  }
+
+  const buttons = DEPOSIT_PRESET_AMOUNTS.map(amount => ([{ text: `${amount}$`, callback_data: `deposit_amount_${currency}_${index}_${amount}` }]));
   buttons.push([{ text: await getText(userId, 'back'), callback_data: 'deposit' }]);
 
-  const msg = lang === 'ar'
-    ? '⚡ اختر مبلغ الشحن عبر Binance Pay:'
-    : '⚡ Choose the Binance Pay deposit amount:';
-
-  await bot.sendMessage(userId, msg, {
+  await bot.sendMessage(userId, await getText(userId, 'chooseDepositAmountForMethod', { method: methodName }), {
     reply_markup: { inline_keyboard: buttons }
   });
 }
 
-async function sendLegacyBinanceAutoInstructions(userId, amount) {
+async function sendSelectedDepositMethodInstructions(userId, currency, index, amount) {
+  const selected = await getDepositMethodByIndex(currency, index);
+  if (!selected?.method) {
+    await bot.sendMessage(userId, await getText(userId, 'error'));
+    return;
+  }
+
   const user = await User.findByPk(userId);
-  const lang = user?.lang || 'en';
-  const credentials = await getBinanceCredentials();
-  const payId = credentials?.payId || BINANCE_PAY_ID || '842505320';
+  const lang = user?.lang === 'ar' ? 'ar' : 'en';
+  const config = selected.config;
+  const method = selected.method;
+  const usdAmount = Number(amount);
+  const iqdAmount = currency === 'IQD'
+    ? Number(usdAmount * Number(config.rate || 1500)).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+    : null;
+  const methodName = lang === 'ar'
+    ? (method.nameAr || method.nameEn || '')
+    : (method.nameEn || method.nameAr || '');
+  const methodDetails = String(method.value || '').trim();
+  const createdAt = Date.now();
 
-  const msg = lang === 'ar'
-    ? `⚡ Binance Auto (USDT)\n\nقم بتحويل مبلغ <b>${amount}$</b> إلى رقم بايننس التالي:\n\n<code>${escapeHtml(payId)}</code>\n\nبعد الدفع أرسل <b>Order ID</b> فقط هنا ليتم التحقق تلقائياً.`
-    : `⚡ Binance Auto (USDT)\n\nSend <b>${amount}$</b> to the following Binance ID:\n\n<code>${escapeHtml(payId)}</code>\n\nAfter payment, send the <b>Order ID</b> only here for automatic verification.`;
+  const messageText = currency === 'IQD'
+    ? await getText(userId, 'depositMethodInstructionsIQD', {
+      method: methodName,
+      amountUSD: formatUsdPrice(usdAmount),
+      amountIQD: iqdAmount,
+      rate: formatUsdPrice(config.rate || 1500),
+      details: methodDetails,
+      time: formatAdminDateTime(createdAt)
+    })
+    : await getText(userId, 'depositMethodInstructionsUSD', {
+      method: methodName,
+      amountUSD: formatUsdPrice(usdAmount),
+      details: methodDetails,
+      time: formatAdminDateTime(createdAt)
+    });
 
-  const keyboard = {
-    inline_keyboard: [
-      [{ text: lang === 'ar' ? '🔙 رجوع' : '🔙 Back', callback_data: 'deposit_binance_auto' }],
-      [{ text: await getText(userId, 'cancel'), callback_data: 'cancel_action' }]
-    ]
-  };
-
-  await bot.sendMessage(userId, msg, { parse_mode: 'HTML', reply_markup: keyboard });
-  await setUserState(userId, {
-    action: 'binance_auto_session',
-    amount,
-    createdAt: Date.now()
+  await bot.sendMessage(userId, messageText, {
+    parse_mode: 'HTML',
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: await getText(userId, 'donePayment'), callback_data: 'deposit_done_send_proof' }],
+        [{ text: await getText(userId, 'back'), callback_data: `deposit_pick_${currency}_${index}` }],
+        [{ text: await getText(userId, 'cancel'), callback_data: 'cancel_action' }]
+      ]
+    }
   });
-}
-
-async function sendBinanceAutoInstructions(userId, amount) {
-  if (!isBinancePayConfigured()) {
-    await bot.sendMessage(userId, await getText(userId, 'binancePayNotConfigured')).catch(() => {});
-    return;
-  }
-
-  const createResult = await createBinancePayTopupOrder({
-    userId,
-    amount,
-    currency: 'USDT',
-    source: 'telegram_bot',
-    terminalType: 'WAP'
-  });
-
-  if (!createResult.success || !createResult.payment) {
-    console.error('Binance Pay create order error:', createResult.reason || createResult.errorMessage || createResult);
-    await bot.sendMessage(userId, await getText(userId, 'binancePayCreateError'));
-    return;
-  }
 
   await setUserState(userId, {
-    action: 'binance_pay_pending_order',
-    merchantTradeNo: createResult.payment.merchantTradeNo,
-    prepayId: createResult.payment.prepayId || null,
-    amount: Number(createResult.payment.amount || amount),
-    currency: createResult.payment.currency || 'USDT',
-    createdAt: Date.now()
+    action: 'deposit_waiting_done',
+    currency,
+    methodIndex: Number(index),
+    amountUSD: usdAmount,
+    createdAt
   });
-
-  await sendBinancePayCheckoutMessage(userId, createResult.payment);
 }
-
 
 async function showPaymentMethodsForDeposit(userId, amount, currency) {
-  const msg = await renderDepositMessage(userId, currency, amount);
-  await bot.sendMessage(userId, msg, {
-    parse_mode: 'Markdown',
-    reply_markup: await getBackAndCancelReplyMarkup(userId, 'deposit')
-  });
-  await setUserState(userId, { action: 'deposit_awaiting_proof', amount, currency });
+  await showCurrencyOptions(userId);
 }
 
 const BINANCE_PAY_CERT_CACHE = {
@@ -7726,7 +7833,7 @@ async function processPurchase(userId, merchantId, quantity, discountCode = null
   }
 }
 
-async function requestDeposit(userId, amount, currency, message, imageFileId = null, tgUser = null) {
+async function requestDeposit(userId, amount, currency, message, imageFileId = null, tgUser = null, meta = {}) {
   const now = new Date();
   const deposit = await BalanceTransaction.create({
     userId,
@@ -7735,18 +7842,23 @@ async function requestDeposit(userId, amount, currency, message, imageFileId = n
     status: 'pending',
     imageFileId,
     caption: message,
-    txid: currency,
+    txid: `${currency}_${Date.now()}`,
     lastReminderAt: now
   });
 
   const config = await getDepositConfig(currency);
-  const parts = formatDateParts(new Date());
+  const submittedParts = formatDateParts(now);
+  const selectedParts = formatDateParts(meta?.selectedAt || now);
   const usernameText = tgUser?.username ? `@${tgUser.username}` : 'لا يوجد';
   const fullName = [tgUser?.first_name, tgUser?.last_name].filter(Boolean).join(' ').trim() || 'لا يوجد';
   const amountUSD = Number(amount).toFixed(2);
-  const amountIQD = Number(amount * config.rate).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  const amountIQD = currency === 'IQD'
+    ? Number(amount * Number(config.rate || 1500)).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+    : '-';
+  const methodName = String(meta?.methodName || '').trim() || (currency === 'IQD' ? 'طريقة دفع عراقية' : 'Dollar payment method');
+  const methodValue = String(meta?.methodValue || '').trim() || '-';
   const currencyDisplay = currency === 'USD'
-    ? `${config.displayNameAr || 'بايننس'} / ${config.displayNameEn || 'Binance'}`
+    ? `${config.displayNameAr || 'دولار'} / ${config.displayNameEn || 'Dollar'}`
     : `${config.displayNameAr || 'دينار عراقي'} / ${config.displayNameEn || 'Iraqi Dinar'}`;
 
   const notifText =
@@ -7754,14 +7866,14 @@ async function requestDeposit(userId, amount, currency, message, imageFileId = n
     `المعرف: ${usernameText}\n` +
     `الاسم: ${fullName}\n` +
     `الايدي: ${userId}\n\n` +
+    `طريقة الدفع: ${methodName}\n` +
+    `تفاصيل الطريقة: ${methodValue}\n` +
     `العملة المختارة: ${currencyDisplay}\n` +
     `المبلغ بالدولار: ${amountUSD} USD\n` +
     `المبلغ بالدينار: ${amountIQD} IQD\n\n` +
     `الرسالة: ${String(message || '').trim() || 'No message'}\n\n` +
-    `السنة: ${parts.year}\n` +
-    `الشهر: ${parts.month}\n` +
-    `اليوم: ${parts.day}\n` +
-    `الساعة: ${parts.hour}:${parts.minute}:${parts.second}`;
+    `وقت إنشاء الطلب: ${selectedParts.year}-${selectedParts.month}-${selectedParts.day} ${selectedParts.hour}:${selectedParts.minute}:${selectedParts.second}\n` +
+    `وقت إرسال الإثبات: ${submittedParts.year}-${submittedParts.month}-${submittedParts.day} ${submittedParts.hour}:${submittedParts.minute}:${submittedParts.second}`;
 
   let receiptMsg;
   if (imageFileId) {
@@ -8656,11 +8768,55 @@ bot.on('callback_query', async query => {
       return;
     }
 
-    if (data === 'deposit_currency_iqd' || data === 'deposit_currency_usd') {
-      const currency = data === 'deposit_currency_iqd' ? 'IQD' : 'USD';
-      const currencyLabel = await getDepositDisplayName(userId, currency);
-      await setUserState(userId, { action: 'deposit_amount', currency });
-      await bot.sendMessage(userId, await getText(userId, 'enterDepositAmountForCurrency', { currency: currencyLabel }), {
+    if (data.startsWith('deposit_pick_')) {
+      const match = data.match(/^deposit_pick_(IQD|USD)_(\d+)$/);
+      if (!match) {
+        await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'error') });
+        return;
+      }
+      await showDepositAmountOptionsForMethod(userId, match[1], parseInt(match[2], 10));
+      await cleanupPressedMessage();
+      await bot.answerCallbackQuery(query.id);
+      return;
+    }
+
+    if (data.startsWith('deposit_amount_')) {
+      const match = data.match(/^deposit_amount_(IQD|USD)_(\d+)_(\d+(?:\.\d+)?)$/);
+      if (!match) {
+        await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'error') });
+        return;
+      }
+      await sendSelectedDepositMethodInstructions(userId, match[1], parseInt(match[2], 10), parseFloat(match[3]));
+      await cleanupPressedMessage();
+      await bot.answerCallbackQuery(query.id);
+      return;
+    }
+
+    if (data === 'deposit_done_send_proof') {
+      const userRecord = await User.findByPk(userId, { attributes: ['state'] });
+      const state = safeParseState(userRecord?.state);
+      if (!state || state.action !== 'deposit_waiting_done') {
+        await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'error') });
+        return;
+      }
+
+      const selected = await getDepositMethodByIndex(state.currency, state.methodIndex);
+      if (!selected?.method) {
+        await clearUserState(userId);
+        await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'error') });
+        return;
+      }
+
+      const methodName = await getDepositMethodNameForUser(userId, state.currency, state.methodIndex);
+      await setUserState(userId, {
+        action: 'deposit_awaiting_proof',
+        currency: state.currency,
+        methodIndex: state.methodIndex,
+        amountUSD: Number(state.amountUSD || 0),
+        createdAt: state.createdAt || Date.now()
+      });
+
+      await bot.sendMessage(userId, await getText(userId, 'depositSendProofNow', { method: methodName }), {
         reply_markup: await getBackAndCancelReplyMarkup(userId, 'deposit')
       });
       await cleanupPressedMessage();
@@ -8668,28 +8824,17 @@ bot.on('callback_query', async query => {
       return;
     }
 
-    // -------------------------------------------------------------------
-    // زر الدفع التلقائي عبر Binance
-    if (data === 'deposit_binance_auto') {
-      await showBinanceAutoAmountOptions(userId);
+    if (data === 'deposit_binance_auto' || data.startsWith('deposit_binance_amount_') || data.startsWith('binance_pay_check_')) {
+      await clearUserState(userId);
+      await bot.sendMessage(userId, await getText(userId, 'binanceRemoved'), {
+        reply_markup: await getBackAndCancelReplyMarkup(userId, 'deposit')
+      });
       await cleanupPressedMessage();
       await bot.answerCallbackQuery(query.id);
       return;
     }
 
-    if (data.startsWith('deposit_binance_amount_')) {
-      const amount = parseFloat(data.replace('deposit_binance_amount_', ''));
-      if (!Number.isFinite(amount) || amount <= 0) {
-        await bot.answerCallbackQuery(query.id, { text: 'Invalid amount' });
-        return;
-      }
-      await sendBinanceAutoInstructions(userId, amount);
-      await cleanupPressedMessage();
-      await bot.answerCallbackQuery(query.id);
-      return;
-    }
-
-    if (data.startsWith('binance_pay_check_')) {
+    if (false && data.startsWith('binance_pay_check_')) {
       const merchantTradeNo = String(data.replace('binance_pay_check_', '') || '').trim();
       const result = await syncBinancePayOrderStatus({ merchantTradeNo }, { source: 'bot_callback', notifyUser: true });
       if (!result.success) {
@@ -10230,6 +10375,55 @@ bot.on('message', async msg => {
       }
     }
 
+    if (state?.action === 'deposit_waiting_done') {
+      await bot.sendMessage(userId, await getText(userId, 'depositTapDoneFirst'), {
+        reply_markup: {
+          inline_keyboard: [[{ text: await getText(userId, 'donePayment'), callback_data: 'deposit_done_send_proof' }]]
+        }
+      });
+      return;
+    }
+
+    if (state?.action === 'deposit_awaiting_proof') {
+      const selected = await getDepositMethodByIndex(state.currency, state.methodIndex);
+      if (!selected?.method) {
+        await clearUserState(userId);
+        await bot.sendMessage(userId, await getText(userId, 'error'));
+        return;
+      }
+
+      const proofText = String(text || msg.caption || '').trim();
+      const imageFileId = photo ? photo[photo.length - 1].file_id : null;
+      const videoFileId = video ? video.file_id : null;
+      const fileId = imageFileId || videoFileId;
+
+      if (!fileId && !proofText) {
+        await bot.sendMessage(userId, await getText(userId, 'depositProofRequired'), {
+          reply_markup: await getBackAndCancelReplyMarkup(userId, 'deposit')
+        });
+        return;
+      }
+
+      await requestDeposit(
+        userId,
+        Number(state.amountUSD || 0),
+        state.currency === 'IQD' ? 'IQD' : 'USD',
+        proofText || (videoFileId ? 'Video proof' : 'Photo proof'),
+        fileId,
+        msg.from,
+        {
+          methodName: selected.method.nameAr || selected.method.nameEn || '',
+          methodValue: selected.method.value || '',
+          selectedAt: state.createdAt || Date.now()
+        }
+      );
+
+      await clearUserState(userId);
+      await bot.sendMessage(userId, await getText(userId, 'depositProofReceived'));
+      await sendMainMenu(userId);
+      return;
+    }
+
     if (state?.action === 'support_reply' && isAdmin(userId)) {
       const targetUserId = state.targetUserId;
       const replyMsg = text || '';
@@ -10754,7 +10948,7 @@ bot.on('message', async msg => {
       if (state.action === 'add_payment_method') {
         if (state.step === 'nameEn') {
           await setUserState(userId, { ...state, nameEn: text, step: 'nameAr' });
-          await bot.sendMessage(userId, 'Send name in Arabic:');
+          await bot.sendMessage(userId, await getText(userId, 'enterMethodNameAr'));
           return;
         }
         if (state.step === 'nameAr') {
@@ -10764,26 +10958,26 @@ bot.on('message', async msg => {
         }
         if (state.step === 'details') {
           await setUserState(userId, { ...state, details: text, step: 'type' });
-          await bot.sendMessage(userId, 'Send type (manual/auto):');
+          await bot.sendMessage(userId, await getText(userId, 'enterMethodTypePrompt'));
           return;
         }
         if (state.step === 'type') {
           const type = String(text || '').toLowerCase();
-          if (!['manual', 'auto'].includes(type)) {
-            await bot.sendMessage(userId, 'Type must be manual or auto');
+          if (type !== 'manual') {
+            await bot.sendMessage(userId, await getText(userId, 'enterMethodTypeInvalid'));
             return;
           }
           await PaymentMethod.create({
             nameEn: state.nameEn,
             nameAr: state.nameAr,
             details: state.details,
-            type,
+            type: 'manual',
             config: {},
             isActive: true,
             minDeposit: 1,
             maxDeposit: 10000
           });
-          await bot.sendMessage(userId, 'Payment method added successfully.');
+          await bot.sendMessage(userId, await getText(userId, 'methodAdded'));
           await clearUserState(userId);
           await showAdminPanel(userId);
           return;
@@ -10794,7 +10988,7 @@ bot.on('message', async msg => {
         if (state.step === 'min') {
           const min = parseFloat(text);
           if (Number.isNaN(min)) {
-            await bot.sendMessage(userId, 'Invalid number');
+            await bot.sendMessage(userId, await getText(userId, 'balanceAmountInvalid'));
             return;
           }
           await setUserState(userId, { ...state, min, step: 'max' });
@@ -10804,7 +10998,7 @@ bot.on('message', async msg => {
         if (state.step === 'max') {
           const max = parseFloat(text);
           if (Number.isNaN(max)) {
-            await bot.sendMessage(userId, 'Invalid number');
+            await bot.sendMessage(userId, await getText(userId, 'balanceAmountInvalid'));
             return;
           }
           const method = await PaymentMethod.findByPk(state.methodId);
@@ -10812,9 +11006,9 @@ bot.on('message', async msg => {
             method.minDeposit = state.min;
             method.maxDeposit = max;
             await method.save();
-            await bot.sendMessage(userId, `Limits set: Min ${state.min} USD, Max ${max} USD.`);
+            await bot.sendMessage(userId, await getText(userId, 'depositLimitsUpdated', { min: state.min, max }));
           } else {
-            await bot.sendMessage(userId, 'Method not found');
+            await bot.sendMessage(userId, await getText(userId, 'methodNotFound'));
           }
           await clearUserState(userId);
           await showAdminPanel(userId);
@@ -11825,27 +12019,20 @@ bot.on('message', async msg => {
     }
 
     if (state?.action === 'deposit_amount') {
-      const amount = parseFloat(text);
-      const currency = state.currency === 'IQD' ? 'IQD' : 'USD';
-      if (Number.isNaN(amount) || amount <= 0) {
-        const currencyLabel = await getDepositDisplayName(userId, currency);
-        await bot.sendMessage(userId, await getText(userId, 'enterDepositAmountForCurrency', { currency: currencyLabel }), {
-          reply_markup: await getBackAndCancelReplyMarkup(userId, 'deposit')
-        });
-        return;
-      }
-      await showPaymentMethodsForDeposit(userId, amount, currency);
-      return;
-    }
-
-    if (state?.action === 'deposit_awaiting_proof' || state?.action === 'binance_auto_session' || state?.action === 'binance_auto_waiting_proof') {
       await clearUserState(userId);
-      await bot.sendMessage(userId, await getText(userId, 'binancePayStatusExpired'));
-      await showBinanceAutoAmountOptions(userId);
+      await showCurrencyOptions(userId);
       return;
     }
 
-    if (state?.action === 'binance_pay_pending_order') {
+    if (state?.action === 'binance_auto_session' || state?.action === 'binance_auto_waiting_proof' || state?.action === 'binance_pay_pending_order') {
+      await clearUserState(userId);
+      await bot.sendMessage(userId, await getText(userId, 'binanceRemoved'), {
+        reply_markup: await getBackAndCancelReplyMarkup(userId, 'deposit')
+      });
+      return;
+    }
+
+    if (false && state?.action === 'binance_pay_pending_order') {
       const normalized = normalizeAssistantText(String(text || ''));
       const shouldCheck = !normalized || /(check|status|paid|done|تحقق|تحقق من الدفع|تم الدفع|دفعت|اكتمل|حاله الدفع|حالة الدفع)/i.test(normalized);
       if (shouldCheck) {
