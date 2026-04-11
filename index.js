@@ -1279,6 +1279,34 @@ Object.assign(DEFAULT_TEXTS.ar, {
 });
 
 Object.assign(DEFAULT_TEXTS.en, {
+  moveDigitalProduct: '📦 Move subscription',
+  moveDigitalProductToMainMenu: '👁 Add to: Main Menu',
+  moveDigitalProductToSection: '📂 Move to section',
+  chooseDigitalProductTarget: 'Choose where this subscription should appear:',
+  digitalProductMovedToMainMenu: '✅ Subscription moved to the main menu.',
+  digitalProductMovedToSection: '✅ Subscription moved to the selected section.',
+  digitalProductPlacementLine: 'Display location: {location}',
+  digitalPlacementMainMenu: 'Main menu',
+  digitalPlacementSection: 'Section: {name}',
+  mainMenuProductsHeader: '🧩 Products shown directly in the main menu',
+  noMainMenuProducts: 'No subscriptions are currently shown directly in the main menu.'
+});
+
+Object.assign(DEFAULT_TEXTS.ar, {
+  moveDigitalProduct: '📦 نقل الاشتراك',
+  moveDigitalProductToMainMenu: '👁 إضافة إلى: القائمة الرئيسية',
+  moveDigitalProductToSection: '📂 نقل إلى خانة',
+  chooseDigitalProductTarget: 'اختر مكان ظهور هذا الاشتراك:',
+  digitalProductMovedToMainMenu: '✅ تم نقل الاشتراك إلى القائمة الرئيسية.',
+  digitalProductMovedToSection: '✅ تم نقل الاشتراك إلى الخانة المحددة.',
+  digitalProductPlacementLine: 'مكان الظهور: {location}',
+  digitalPlacementMainMenu: 'القائمة الرئيسية',
+  digitalPlacementSection: 'الخانة: {name}',
+  mainMenuProductsHeader: '🧩 اشتراكات ظاهرة مباشرة في القائمة الرئيسية',
+  noMainMenuProducts: 'لا توجد اشتراكات ظاهرة مباشرة في القائمة الرئيسية حالياً.'
+});
+
+Object.assign(DEFAULT_TEXTS.en, {
   chooseDepositMethodType: '⚡ Choose the payment method for deposit:',
   chooseDepositAmountForMethod: '⚡ Choose the deposit amount via {method}:',
   depositMethodInstructionsUSD: '⚡ <b>Deposit via {method}</b>\n\n💵 Amount: <b>{amountUSD}$</b>\n📌 Payment details:\n<code>{details}</code>\n🕒 Order time: <b>{time}</b>\n\nAfter paying, press the Done button below.',
@@ -2282,6 +2310,12 @@ function getDigitalSectionCategory(sectionId) {
   return `digital_section_${parseInt(sectionId, 10)}`;
 }
 
+const DIGITAL_MAIN_MENU_CATEGORY = 'digital_main_menu';
+
+function isDigitalMainMenuCategory(category) {
+  return String(category || '') === DIGITAL_MAIN_MENU_CATEGORY;
+}
+
 function parseDigitalSectionIdFromCategory(category) {
   const match = String(category || '').match(/^digital_section_(\d+)$/i);
   return match ? parseInt(match[1], 10) : null;
@@ -2331,6 +2365,30 @@ async function getDigitalProductsForSection(sectionId) {
     where: { category: getDigitalSectionCategory(sectionId) },
     order: [['id', 'ASC']]
   });
+}
+
+async function getDigitalMainMenuProducts() {
+  return await Merchant.findAll({
+    where: { category: DIGITAL_MAIN_MENU_CATEGORY },
+    order: [['id', 'ASC']]
+  });
+}
+
+async function getMerchantPlacementText(userId, merchant) {
+  if (isDigitalMainMenuCategory(merchant?.category)) {
+    return await getText(userId, 'digitalPlacementMainMenu');
+  }
+
+  const sectionId = parseDigitalSectionIdFromCategory(merchant?.category);
+  if (sectionId) {
+    const section = await DigitalSection.findByPk(sectionId);
+    if (section) {
+      const name = `${section.nameEn} / ${section.nameAr}`;
+      return await getText(userId, 'digitalPlacementSection', { name });
+    }
+  }
+
+  return await getText(userId, 'digitalPlacementMainMenu');
 }
 
 async function getChatGptDiscountThreshold() {
@@ -2805,6 +2863,7 @@ async function deleteDigitalSectionAndContent(sectionId) {
 
 async function showDigitalSubscriptionsAdmin(userId) {
   const sections = await getAllDigitalSections();
+  const mainMenuProducts = await getDigitalMainMenuProducts();
   const broadcastEnabled = await getDigitalStockBroadcastEnabled();
   const keyboard = [
     [{ text: await getText(userId, 'addDigitalSectionToMainMenu'), callback_data: 'admin_digital_add_section' }],
@@ -2816,6 +2875,17 @@ async function showDigitalSubscriptionsAdmin(userId) {
       text: `${section.isActive ? '✅' : '⛔'} 🧩 ${section.nameEn} / ${section.nameAr}`,
       callback_data: `admin_digital_section_${section.id}`
     }]);
+  }
+
+  if (mainMenuProducts.length) {
+    keyboard.push([{ text: await getText(userId, 'mainMenuProductsHeader'), callback_data: 'ignore' }]);
+    for (const product of mainMenuProducts) {
+      const stock = await getMerchantAvailableStock(product.id);
+      keyboard.push([{
+        text: `👁 ${product.nameEn} / ${product.nameAr} - ${formatUsdPrice(product.price)} USD (${stock})`,
+        callback_data: `admin_digital_product_${product.id}`
+      }]);
+    }
   }
 
   keyboard.push([{ text: await getText(userId, 'back'), callback_data: 'admin' }]);
@@ -2879,20 +2949,24 @@ async function showDigitalProductAdmin(userId, merchantId) {
     ? await getText(userId, 'typeBulk')
     : await getText(userId, 'typeSingle');
   const description = await getMerchantAdminDescriptionSummary(userId, merchant);
+  const placementText = await getMerchantPlacementText(userId, merchant);
 
   await bot.sendMessage(
     userId,
-    await getText(userId, 'digitalProductManageText', {
+    `${await getText(userId, 'digitalProductManageText', {
       name: `${merchant.nameEn} / ${merchant.nameAr}`,
       price: formatUsdPrice(merchant.price),
       stock,
       type: typeText,
       createdAt: formatAdminDateTime(merchant.createdAt),
       description
-    }),
+    })}
+${await getText(userId, 'digitalProductPlacementLine', { location: placementText })}`,
     {
       reply_markup: {
         inline_keyboard: [
+          [{ text: await getText(userId, 'moveDigitalProductToMainMenu'), callback_data: `admin_move_product_to_main_${merchant.id}` }],
+          [{ text: await getText(userId, 'moveDigitalProductToSection'), callback_data: `admin_choose_product_target_${merchant.id}` }],
           [{ text: await getText(userId, 'addDigitalProductStock'), callback_data: `admin_digital_add_stock_${merchant.id}` }],
           [{ text: await getText(userId, 'viewDigitalProductStock'), callback_data: `admin_view_digital_product_stock_${merchant.id}` }],
           [{ text: await getText(userId, 'searchDeleteDigitalProductStock'), callback_data: `admin_search_delete_digital_product_stock_${merchant.id}` }],
@@ -2962,8 +3036,9 @@ async function showDigitalProductDetails(userId, merchantId) {
   }
 
   const sectionId = parseDigitalSectionIdFromCategory(merchant.category);
+  const isMainMenuProduct = isDigitalMainMenuCategory(merchant.category);
   const section = sectionId ? await DigitalSection.findByPk(sectionId) : null;
-  if (!section || !section.isActive) {
+  if (!isMainMenuProduct && (!section || !section.isActive)) {
     await bot.sendMessage(userId, await getText(userId, 'error'));
     return;
   }
@@ -2990,7 +3065,7 @@ async function showDigitalProductDetails(userId, merchantId) {
   if (aiAssistantEnabled) {
     inlineKeyboard.push([{ text: await getText(userId, 'askAiAboutThisProduct'), callback_data: `ai_about_product_${merchant.id}` }]);
   }
-  inlineKeyboard.push([{ text: await getText(userId, 'back'), callback_data: `digital_section_${sectionId}` }]);
+  inlineKeyboard.push([{ text: await getText(userId, 'back'), callback_data: sectionId ? `digital_section_${sectionId}` : 'back_to_menu' }]);
 
   await bot.sendMessage(
     userId,
@@ -7581,6 +7656,7 @@ async function sendMainMenu(userId) {
   const aiAssistantEnabled = await getAiAssistantEnabled();
   const currentBalanceLine = await getCurrentBalanceLineText(userId);
   const digitalSections = await getDigitalSections();
+  const mainMenuProducts = await getDigitalMainMenuProducts();
   const digitalSectionMap = new Map(digitalSections.map(section => [getDigitalSectionCategory(section.id), section]));
 
   const buttonLabels = {
@@ -7618,6 +7694,19 @@ async function sendMainMenu(userId) {
     if (visibility[id] !== false && buttonLabels[id]) {
       buttons.push([{ text: buttonLabels[id], callback_data: id === 'admin_panel' ? 'admin' : id }]);
     }
+  }
+
+  for (const product of mainMenuProducts) {
+    const stock = await getMerchantAvailableStock(product.id);
+    const name = await getMerchantDisplayName(product, userId);
+    buttons.push([{
+      text: await getText(userId, 'digitalProductListButton', {
+        name,
+        price: formatUsdPrice(product.price),
+        stock
+      }),
+      callback_data: `digital_product_${product.id}`
+    }]);
   }
 
   await bot.sendMessage(userId, `${await getText(userId, 'menu')}
@@ -10098,6 +10187,55 @@ bot.on('callback_query', async query => {
       await setUserState(userId, { action: 'add_digital_product', sectionId, step: 'nameEn' });
       await bot.sendMessage(userId, await getText(userId, 'askDigitalProductNameEn'));
       await bot.answerCallbackQuery(query.id);
+      return;
+    }
+
+    const moveProductToMainMatch = data.match(/^admin_move_product_to_main_(\d+)$/);
+    if (moveProductToMainMatch && isAdmin(userId)) {
+      const merchantId = parseInt(moveProductToMainMatch[1], 10);
+      const merchant = await Merchant.findByPk(merchantId);
+      if (merchant) {
+        merchant.category = DIGITAL_MAIN_MENU_CATEGORY;
+        await merchant.save();
+      }
+      await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'digitalProductMovedToMainMenu') });
+      await showDigitalProductAdmin(userId, merchantId);
+      return;
+    }
+
+    const chooseProductTargetMatch = data.match(/^admin_choose_product_target_(\d+)$/);
+    if (chooseProductTargetMatch && isAdmin(userId)) {
+      const merchantId = parseInt(chooseProductTargetMatch[1], 10);
+      const sections = await getAllDigitalSections();
+      const keyboard = [
+        [{ text: await getText(userId, 'moveDigitalProductToMainMenu'), callback_data: `admin_move_product_to_main_${merchantId}` }]
+      ];
+      for (const section of sections) {
+        keyboard.push([{
+          text: `🧩 ${section.nameEn} / ${section.nameAr}`,
+          callback_data: `admin_move_product_to_section_${merchantId}_${section.id}`
+        }]);
+      }
+      keyboard.push([{ text: await getText(userId, 'back'), callback_data: `admin_digital_product_${merchantId}` }]);
+      await bot.sendMessage(userId, await getText(userId, 'chooseDigitalProductTarget'), {
+        reply_markup: { inline_keyboard: keyboard }
+      });
+      await bot.answerCallbackQuery(query.id);
+      return;
+    }
+
+    const moveProductToSectionMatch = data.match(/^admin_move_product_to_section_(\d+)_(\d+)$/);
+    if (moveProductToSectionMatch && isAdmin(userId)) {
+      const merchantId = parseInt(moveProductToSectionMatch[1], 10);
+      const sectionId = parseInt(moveProductToSectionMatch[2], 10);
+      const merchant = await Merchant.findByPk(merchantId);
+      const section = await DigitalSection.findByPk(sectionId);
+      if (merchant && section) {
+        merchant.category = getDigitalSectionCategory(sectionId);
+        await merchant.save();
+      }
+      await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'digitalProductMovedToSection') });
+      await showDigitalProductAdmin(userId, merchantId);
       return;
     }
 
