@@ -2598,6 +2598,62 @@ async function getActivationSupportReplyMarkup(userId, merchant) {
   return { inline_keyboard: rows };
 }
 
+
+function getMerchantInviteGuideConfig(merchant) {
+  const meta = getMerchantMetaConfig(merchant);
+  return {
+    type: String(meta.inviteGuideType || '').trim(),
+    text: String(meta.inviteGuideText || '').trim(),
+    fileId: String(meta.inviteGuideFileId || '').trim(),
+    caption: String(meta.inviteGuideCaption || '').trim()
+  };
+}
+
+function getInviteGuideTypeLabel(lang, type) {
+  const normalizedLang = lang === 'ar' ? 'ar' : 'en';
+  const normalizedType = String(type || '').trim().toLowerCase();
+  if (normalizedType === 'text') return DEFAULT_TEXTS[normalizedLang]?.inviteGuideTextType || 'Text';
+  if (normalizedType === 'photo') return DEFAULT_TEXTS[normalizedLang]?.inviteGuidePhotoType || 'Photo';
+  if (normalizedType === 'video') return DEFAULT_TEXTS[normalizedLang]?.inviteGuideVideoType || 'Video';
+  return DEFAULT_TEXTS[normalizedLang]?.inviteGuideEmpty || '-';
+}
+
+async function sendInviteGuideToUser(userId, merchant) {
+  const guide = getMerchantInviteGuideConfig(merchant);
+  if (!guide.type) return false;
+
+  try {
+    if (guide.type === 'photo' && guide.fileId) {
+      await bot.sendPhoto(userId, guide.fileId, { caption: guide.caption || undefined });
+      return true;
+    }
+    if (guide.type === 'video' && guide.fileId) {
+      await bot.sendVideo(userId, guide.fileId, { caption: guide.caption || undefined });
+      return true;
+    }
+    if (guide.type === 'text' && guide.text) {
+      await bot.sendMessage(userId, guide.text);
+      return true;
+    }
+  } catch (err) {
+    console.error('sendInviteGuideToUser error:', err.message || err);
+  }
+
+  return false;
+}
+
+async function getActivationDelaySelectionMarkup(merchantId, targetUserId) {
+  return {
+    inline_keyboard: [
+      [{ text: await getText(ADMIN_ID, 'activationDelay1'), callback_data: `activation_delay_${merchantId}_${targetUserId}_1` }],
+      [{ text: await getText(ADMIN_ID, 'activationDelay2'), callback_data: `activation_delay_${merchantId}_${targetUserId}_2` }],
+      [{ text: await getText(ADMIN_ID, 'activationDelay3'), callback_data: `activation_delay_${merchantId}_${targetUserId}_3` }],
+      [{ text: await getText(ADMIN_ID, 'activationDelay4'), callback_data: `activation_delay_${merchantId}_${targetUserId}_4` }],
+      [{ text: await getText(ADMIN_ID, 'back'), callback_data: 'admin_digital_subscriptions' }]
+    ]
+  };
+}
+
 async function sendActivationRequestToAdmin(userId, merchant, email, amount) {
   const user = await User.findByPk(userId);
   const timestamp = formatAdminDateTime(new Date());
@@ -2613,10 +2669,15 @@ async function sendActivationRequestToAdmin(userId, merchant, email, amount) {
   })}`;
   const sent = await bot.sendMessage(ADMIN_ID, text, {
     reply_markup: {
-      inline_keyboard: [[
-        { text: await getText(ADMIN_ID, 'activationApprove'), callback_data: `activation_approve_${merchant.id}_${userId}` },
-        { text: await getText(ADMIN_ID, 'activationReject'), callback_data: `activation_reject_${merchant.id}_${userId}` }
-      ]]
+      inline_keyboard: [
+        [
+          { text: await getText(ADMIN_ID, 'activationApprove'), callback_data: `activation_approve_${merchant.id}_${userId}` },
+          { text: await getText(ADMIN_ID, 'activationReject'), callback_data: `activation_reject_${merchant.id}_${userId}` }
+        ],
+        [
+          { text: await getText(ADMIN_ID, 'activationDelayShort'), callback_data: `activation_delaypick_${merchant.id}_${userId}` }
+        ]
+      ]
     }
   });
   return { sent, timestamp };
