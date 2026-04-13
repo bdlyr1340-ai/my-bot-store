@@ -6,6 +6,9 @@ const TelegramBot = require('node-telegram-bot-api');
 const FormData = require('form-data');
 const { Sequelize, DataTypes, Op } = require('sequelize');
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
 
 const TOKEN = process.env.BOT_TOKEN;
 const ADMIN_ID = parseInt(process.env.ADMIN_ID, 10);
@@ -28,6 +31,8 @@ const OPENAI_BASE_URL = String(process.env.OPENAI_BASE_URL || 'https://api.opena
 const APP_TIMEZONE = String(process.env.APP_TIMEZONE || 'Asia/Baghdad');
 const DEFAULT_SUPPORT_TELEGRAM_URL = String(process.env.DEFAULT_SUPPORT_TELEGRAM_URL || 'https://t.me/xawasx').trim();
 const DEFAULT_SUPPORT_WHATSAPP_URL = String(process.env.DEFAULT_SUPPORT_WHATSAPP_URL || 'https://wa.me/9647882891545').trim();
+const BACKUP_INTERVAL_MS = 5 * 60 * 60 * 1000;
+const BACKUP_DIR = path.join(os.tmpdir(), 'telegram-bot-db-backups');
 
 if (!TOKEN || Number.isNaN(ADMIN_ID) || !DATABASE_URL) {
   console.error('❌ Missing required environment variables');
@@ -1521,24 +1526,175 @@ Object.assign(DEFAULT_TEXTS.ar, {
 Object.assign(DEFAULT_TEXTS.en, {
   activationRefundButton: '💸 Refund money',
   activationRefundNoCharge: '✅ No amount was deducted from your balance, so nothing needs to be refunded.',
-  activationRefundDone: '✅ Your money was refunded successfully.',
   activationApprovedChargeFailedUser: '❌ Your request was approved, but your balance is no longer enough to complete activation. Please recharge and contact support.',
   activationApprovedChargeFailedAdmin: '❌ Activation cannot be completed because the user balance is no longer enough.',
   activationSupportAfterDone: '📞 Contact support',
-  refundedAmountLine: '💰 Refunded amount: {amount} USD',
   priceInlineLabel: '{name} - {price} USD'
 });
 
 Object.assign(DEFAULT_TEXTS.ar, {
   activationRefundButton: '💸 استرجاع الاموال',
   activationRefundNoCharge: '✅ لم يتم خصم أي مبلغ من رصيدك، لذلك لا حاجة للاسترجاع.',
-  activationRefundDone: '✅ تم استرجاع الاموال بنجاح',
   activationApprovedChargeFailedUser: '❌ تمت الموافقة على طلبك لكن رصيدك الحالي لم يعد كافياً لإكمال التفعيل. يرجى الشحن ثم التواصل مع الدعم.',
   activationApprovedChargeFailedAdmin: '❌ لا يمكن إكمال التفعيل لأن رصيد المستخدم الحالي لم يعد كافياً.',
   activationSupportAfterDone: '📞 تواصل مع الدعم',
-  refundedAmountLine: '💰 الاموال المسترجعة: {amount} دولار',
   priceInlineLabel: '{name} - {price} دولار'
 });
+
+
+Object.assign(DEFAULT_TEXTS.en, {
+  backupNow: '🗂 Send backup now',
+  restoreBackupFile: '♻️ Restore file',
+  restoreBackupPrompt: 'Send the backup file here now as a JSON document. Only missing records will be restored, and existing records will remain unchanged.',
+  backupCaptionManual: '🗂 Manual database backup\nTime: {time}\nTables: {tables}\nRecords: {records}',
+  backupCaptionAuto: '🤖 Automatic database backup\nTime: {time}\nTables: {tables}\nRecords: {records}',
+  backupSentDone: '✅ The backup file was created and sent successfully.',
+  backupRestoreStarted: '⏳ Backup file received. Restoring missing data now...',
+  backupRestoreDone: '✅ Restore completed successfully.\n\nAdded rows: {created}\nAlready existing: {skipped}\nErrors: {errors}',
+  backupRestoreInvalid: '❌ The backup file is invalid or unsupported. Send a valid JSON backup file created by this bot.',
+  backupRestoreFailed: '❌ Failed to restore the backup file.',
+  backupSectionTitle: 'Database backup',
+  backupCancelRestore: '❌ Cancel restore'
+});
+
+Object.assign(DEFAULT_TEXTS.ar, {
+  backupNow: '🗂 ارسال نسخة احتياطية الآن',
+  restoreBackupFile: '♻️ استرجاع الملف',
+  restoreBackupPrompt: 'أرسل الآن ملف النسخة الاحتياطية هنا بصيغة JSON. سيتم استرجاع البيانات المفقودة فقط، ولن يتم العبث بالبيانات الموجودة حالياً.',
+  backupCaptionManual: '🗂 نسخة احتياطية يدوية لقاعدة البيانات\nالوقت: {time}\nعدد الجداول: {tables}\nعدد السجلات: {records}',
+  backupCaptionAuto: '🤖 نسخة احتياطية تلقائية لقاعدة البيانات\nالوقت: {time}\nعدد الجداول: {tables}\nعدد السجلات: {records}',
+  backupSentDone: '✅ تم إنشاء ملف النسخة الاحتياطية وإرساله بنجاح.',
+  backupRestoreStarted: '⏳ تم استلام ملف النسخة الاحتياطية. جاري استرجاع البيانات المفقودة الآن...',
+  backupRestoreDone: '✅ تم استرجاع البيانات بنجاح.\n\nالسجلات التي تمت إضافتها: {created}\nالسجلات الموجودة مسبقاً: {skipped}\nالأخطاء: {errors}',
+  backupRestoreInvalid: '❌ ملف النسخة الاحتياطية غير صالح أو غير مدعوم. أرسل ملف JSON صحيح تم إنشاؤه من هذا البوت.',
+  backupRestoreFailed: '❌ فشل استرجاع ملف النسخة الاحتياطية.',
+  backupSectionTitle: 'النسخة الاحتياطية لقاعدة البيانات',
+  backupCancelRestore: '❌ إلغاء الاسترجاع'
+});
+
+const BACKUP_MODEL_REGISTRY = [
+  { key: 'users', model: User, where: row => ({ id: row.id }) },
+  { key: 'settings', model: Setting, where: row => ({ key: row.key, lang: row.lang }) },
+  { key: 'digital_sections', model: DigitalSection, where: row => ({ id: row.id }) },
+  { key: 'merchants', model: Merchant, where: row => ({ id: row.id }) },
+  { key: 'payment_methods', model: PaymentMethod, where: row => ({ id: row.id }) },
+  { key: 'deposit_configs', model: DepositConfig, where: row => ({ currency: row.currency }) },
+  { key: 'channel_configs', model: ChannelConfig, where: row => ({ id: row.id }) },
+  { key: 'captchas', model: Captcha, where: row => ({ userId: row.userId }) },
+  { key: 'bot_services', model: BotService, where: row => ({ id: row.id }) },
+  { key: 'bot_stats', model: BotStat, where: row => row.id ? ({ id: row.id }) : ({ botId: row.botId, action: row.action }) },
+  { key: 'codes', model: Code, where: row => ({ id: row.id }) },
+  { key: 'balance_transactions', model: BalanceTransaction, where: row => ({ id: row.id }) },
+  { key: 'binance_pay_payments', model: BinancePayPayment, where: row => ({ merchantTradeNo: row.merchantTradeNo }) },
+  { key: 'discount_codes', model: DiscountCode, where: row => ({ code: row.code }) },
+  { key: 'referral_rewards', model: ReferralReward, where: row => ({ id: row.id }) },
+  { key: 'redeem_services', model: RedeemService, where: row => ({ id: row.id }) },
+  { key: 'activation_requests', model: ActivationRequest, where: row => ({ id: row.id }) },
+  { key: 'private_channel_code_post_cache', model: PrivateChannelCodePostCache, where: row => ({ channelChatId: row.channelChatId, messageId: row.messageId }) }
+];
+
+function getBackupTimestampLabel(date = new Date()) {
+  return formatAdminDateTime(date);
+}
+
+async function buildDatabaseBackupPayload() {
+  const data = {};
+  let totalRecords = 0;
+  for (const entry of BACKUP_MODEL_REGISTRY) {
+    const rows = await entry.model.findAll({ raw: true, order: [['createdAt', 'ASC'], ['id', 'ASC']] }).catch(async () => {
+      return await entry.model.findAll({ raw: true, order: [['id', 'ASC']] });
+    });
+    data[entry.key] = rows;
+    totalRecords += rows.length;
+  }
+  return {
+    meta: {
+      format: 'telegram-bot-backup-v1',
+      createdAt: new Date().toISOString(),
+      timezone: APP_TIMEZONE,
+      totalTables: BACKUP_MODEL_REGISTRY.length,
+      totalRecords
+    },
+    data
+  };
+}
+
+async function writeDatabaseBackupFile(payload) {
+  await fs.promises.mkdir(BACKUP_DIR, { recursive: true });
+  const safeStamp = String(getBackupTimestampLabel(new Date())).replace(/[^0-9]/g, '');
+  const filePath = path.join(BACKUP_DIR, `database-backup-${safeStamp || Date.now()}.json`);
+  await fs.promises.writeFile(filePath, JSON.stringify(payload, null, 2), 'utf8');
+  return filePath;
+}
+
+async function sendDatabaseBackupToAdmin(trigger = 'manual') {
+  const payload = await buildDatabaseBackupPayload();
+  const filePath = await writeDatabaseBackupFile(payload);
+  const captionKey = trigger === 'auto' ? 'backupCaptionAuto' : 'backupCaptionManual';
+  const caption = await getText(ADMIN_ID, captionKey, {
+    time: getBackupTimestampLabel(new Date(payload.meta.createdAt)),
+    tables: payload.meta.totalTables,
+    records: payload.meta.totalRecords
+  });
+  try {
+    await bot.sendDocument(ADMIN_ID, filePath, {}, {
+      filename: path.basename(filePath),
+      contentType: 'application/json'
+    });
+    await bot.sendMessage(ADMIN_ID, caption);
+    return { success: true, filePath, payload };
+  } finally {
+    setTimeout(() => {
+      fs.promises.unlink(filePath).catch(() => {});
+    }, 30000);
+  }
+}
+
+async function doesBackupRowExist(entry, row) {
+  const existing = await entry.model.findOne({ where: entry.where(row), raw: true });
+  return Boolean(existing);
+}
+
+async function resetModelSequenceIfNeeded(model) {
+  const attrs = model.getAttributes ? model.getAttributes() : {};
+  if (!attrs.id || !attrs.id.autoIncrement) return;
+  const tableNameRaw = model.getTableName();
+  const tableName = typeof tableNameRaw === 'string' ? tableNameRaw : tableNameRaw.tableName;
+  await sequelize.query(`SELECT setval(pg_get_serial_sequence('"${tableName}"', 'id'), COALESCE((SELECT MAX(id) FROM "${tableName}"), 1), (SELECT COUNT(*) > 0 FROM "${tableName}"));`).catch(() => {});
+}
+
+async function restoreDatabaseBackupFromPayload(payload) {
+  if (!payload || payload.meta?.format !== 'telegram-bot-backup-v1' || !payload.data || typeof payload.data !== 'object') {
+    throw new Error('invalid_backup_format');
+  }
+
+  const summary = { created: 0, skipped: 0, errors: 0 };
+  for (const entry of BACKUP_MODEL_REGISTRY) {
+    const rows = Array.isArray(payload.data[entry.key]) ? payload.data[entry.key] : [];
+    for (const row of rows) {
+      try {
+        const exists = await doesBackupRowExist(entry, row);
+        if (exists) {
+          summary.skipped += 1;
+          continue;
+        }
+        await entry.model.create(row);
+        summary.created += 1;
+      } catch (err) {
+        summary.errors += 1;
+        console.error(`restoreDatabaseBackupFromPayload error in ${entry.key}:`, err.message || err);
+      }
+    }
+    await resetModelSequenceIfNeeded(entry.model);
+  }
+  return summary;
+}
+
+async function downloadTelegramFile(fileId) {
+  const link = await bot.getFileLink(fileId);
+  const response = await axios.get(link, { responseType: 'arraybuffer', timeout: 120000 });
+  return Buffer.from(response.data);
+}
 
 function isAdmin(userId) {
   return Number(userId) === ADMIN_ID;
@@ -1609,50 +1765,6 @@ async function safePinChatMessage(chatId, messageId) {
   } catch {
     return false;
   }
-}
-
-async function safeUnpinChatMessage(chatId, messageId) {
-  if (!chatId) return false;
-  try {
-    if (messageId) {
-      await bot.unpinChatMessage(chatId, messageId);
-    } else {
-      await bot.unpinChatMessage(chatId);
-    }
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function safeClearInlineKeyboard(chatId, messageId) {
-  if (!chatId || !messageId) return false;
-  try {
-    await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: chatId, message_id: messageId });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function getActivationRequestMeta(request) {
-  const notes = String(request?.notes || '');
-  const read = key => {
-    const match = notes.match(new RegExp(`${key}:(\d+)`));
-    return match ? parseInt(match[1], 10) : null;
-  };
-  return {
-    userPinnedMessageId: read('user_pin_message_id'),
-    adminPinnedMessageId: read('admin_pin_message_id')
-  };
-}
-
-function appendActivationRequestNote(request, note) {
-  const current = String(request?.notes || '').trim();
-  const normalized = String(note || '').trim();
-  if (!normalized || current.includes(normalized)) return current;
-  request.notes = [current, normalized].filter(Boolean).join(' | ');
-  return request.notes;
 }
 
 function shouldAutoDeleteIncomingMessage(msg, state, admin = false) {
@@ -2673,17 +2785,7 @@ async function getActivationRejectedReplyMarkup(userId, merchant, requestId) {
   if (contacts.telegram) rows.push([{ text: await getText(userId, 'openTelegram'), url: contacts.telegram }]);
   if (contacts.whatsapp) rows.push([{ text: await getText(userId, 'openWhatsApp'), url: contacts.whatsapp }]);
   if (contacts.extraLabel && contacts.extraUrl) rows.push([{ text: await getText(userId, 'openExtraContact', { label: contacts.extraLabel }), url: contacts.extraUrl }]);
-  rows.push([{ text: await getText(userId, 'cancel'), callback_data: 'cancel_action' }]);
-  return { inline_keyboard: rows };
-}
-
-async function getActivationRefundReplyMarkup(userId, merchant) {
-  const contacts = getMerchantSupportContacts(merchant);
-  const rows = [];
-  if (contacts.telegram) rows.push([{ text: await getText(userId, 'openTelegram'), url: contacts.telegram }]);
-  if (contacts.whatsapp) rows.push([{ text: await getText(userId, 'openWhatsApp'), url: contacts.whatsapp }]);
-  if (contacts.extraLabel && contacts.extraUrl) rows.push([{ text: await getText(userId, 'openExtraContact', { label: contacts.extraLabel }), url: contacts.extraUrl }]);
-  rows.push([{ text: await getText(userId, 'cancel'), callback_data: 'cancel_action' }]);
+  rows.push([{ text: await getText(userId, 'back'), callback_data: 'back_to_menu' }]);
   return { inline_keyboard: rows };
 }
 
@@ -2773,9 +2875,7 @@ async function sendActivationRequestToAdmin(userId, merchant, email, amount) {
   const user = await User.findByPk(userId);
   const timestamp = formatAdminDateTime(new Date());
   const service = `${merchant.nameEn} / ${merchant.nameAr}`;
-  const text = `${await getText(ADMIN_ID, 'activationRequestAdminTitle')}
-
-${await getText(ADMIN_ID, 'activationRequestAdminBody', {
+  const text = `${await getText(ADMIN_ID, 'activationRequestAdminTitle')}\n\n${await getText(ADMIN_ID, 'activationRequestAdminBody', {
     service,
     name: user?.first_name || user?.username || '-',
     username: user?.username ? `@${user.username}` : '-',
@@ -2793,17 +2893,11 @@ ${await getText(ADMIN_ID, 'activationRequestAdminBody', {
         ],
         [
           { text: await getText(ADMIN_ID, 'activationDelayShort'), callback_data: `activation_delaypick_${merchant.id}_${userId}` }
-        ],
-        [
-          { text: await getText(ADMIN_ID, 'cancel'), callback_data: 'cancel_action' }
         ]
       ]
     }
   });
-  if (sent?.message_id) {
-    await safePinChatMessage(ADMIN_ID, sent.message_id);
-  }
-  return { sent, timestamp, adminPinnedMessageId: sent?.message_id || null };
+  return { sent, timestamp };
 }
 
 async function createActivationRequestRecord(userId, merchant, email, amount, adminMessageId = null) {
@@ -9041,8 +9135,8 @@ bot.on('callback_query', async query => {
     }
 
     if (data === 'support_close') {
-      await safeClearInlineKeyboard(query.message.chat.id, query.message.message_id);
       await closeSupportConversationForUser(userId, 'user', ADMIN_ID);
+      await cleanupPressedMessage();
       await bot.answerCallbackQuery(query.id);
       return;
     }
@@ -9067,6 +9161,28 @@ bot.on('callback_query', async query => {
     if (data === 'admin' && isAdmin(userId)) {
       await showAdminPanel(userId);
       await bot.answerCallbackQuery(query.id);
+      return;
+    }
+
+    if (data === 'admin_send_backup_now' && isAdmin(userId)) {
+      await bot.answerCallbackQuery(query.id).catch(() => {});
+      await bot.sendMessage(userId, await getText(userId, 'processing')).catch(() => {});
+      await sendDatabaseBackupToAdmin('manual');
+      await bot.sendMessage(userId, await getText(userId, 'backupSentDone'));
+      return;
+    }
+
+    if (data === 'admin_restore_backup_file' && isAdmin(userId)) {
+      await setUserState(userId, { action: 'restore_backup_file' });
+      await bot.sendMessage(userId, await getText(userId, 'restoreBackupPrompt'), {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: await getText(userId, 'backupCancelRestore'), callback_data: 'cancel_action' }],
+            [{ text: await getText(userId, 'back'), callback_data: 'admin' }]
+          ]
+        }
+      });
+      await bot.answerCallbackQuery(query.id).catch(() => {});
       return;
     }
 
@@ -9324,8 +9440,7 @@ bot.on('callback_query', async query => {
       } else {
         await bot.answerCallbackQuery(query.id, { text: 'Not found' });
       }
-      return;
-    }
+
 
     const activationRefundMatch = data.match(/^activation_refund_(\d+)$/);
     if (activationRefundMatch) {
@@ -9335,21 +9450,16 @@ bot.on('callback_query', async query => {
         await bot.answerCallbackQuery(query.id);
         return;
       }
-      const merchant = await Merchant.findByPk(request.merchantId);
-      const meta = getActivationRequestMeta(request);
-      const wasCharged = String(request.notes || '').includes('charged_on_activation');
-      let refundedAmount = 0;
-
-      if (wasCharged && request.status !== 'refunded') {
-        refundedAmount = Number(request.chargedAmount || 0);
+      if (String(request.notes || '').includes('charged_on_activation') && request.status !== 'refunded') {
+        const amount = Number(request.chargedAmount || 0);
         const userRow = await User.findByPk(userId);
         const currentBalance = Number(userRow?.balance || 0);
         const t = await sequelize.transaction();
         try {
-          await User.update({ balance: currentBalance + refundedAmount }, { where: { id: userId }, transaction: t });
-          await BalanceTransaction.create({ userId, amount: refundedAmount, type: 'digital_activation_refund', status: 'completed' }, { transaction: t });
+          await User.update({ balance: currentBalance + amount }, { where: { id: userId }, transaction: t });
+          await BalanceTransaction.create({ userId, amount, type: 'digital_activation_refund', status: 'completed' }, { transaction: t });
           request.status = 'refunded';
-          appendActivationRequestNote(request, 'refunded_after_reject');
+          request.notes = [String(request.notes || '').trim(), 'refunded_after_reject'].filter(Boolean).join(' | ');
           request.decidedAt = new Date();
           await request.save({ transaction: t });
           await t.commit();
@@ -9360,27 +9470,15 @@ bot.on('callback_query', async query => {
           return;
         }
       }
-
-      if (meta.userPinnedMessageId) await safeUnpinChatMessage(userId, meta.userPinnedMessageId);
-      if (meta.adminPinnedMessageId) await safeUnpinChatMessage(ADMIN_ID, meta.adminPinnedMessageId);
-      if (request.adminMessageId) await safeClearInlineKeyboard(ADMIN_ID, request.adminMessageId);
-      await safeClearInlineKeyboard(query.message.chat.id, query.message.message_id);
-
-      const replyText = refundedAmount > 0
-        ? `${await getText(userId, 'activationRefundDone')}
-${await getText(userId, 'refundedAmountLine', { amount: formatUsdPrice(refundedAmount) })}`
-        : await getText(userId, 'activationRefundNoCharge');
-
-      await bot.sendMessage(userId, replyText, {
-        reply_markup: await getActivationRefundReplyMarkup(userId, merchant || { description: {} })
-      });
+      await bot.sendMessage(userId, await getText(userId, 'activationRefundNoCharge'));
       await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'activationRefundButton') });
+      return;
+    }
       return;
     }
 
     if (data.startsWith('support_close_user_') && isAdmin(userId)) {
       const targetUserId = parseInt(data.split('_')[3], 10);
-      await safeClearInlineKeyboard(query.message.chat.id, query.message.message_id);
       await closeSupportConversationForUser(targetUserId, 'admin', userId);
       await bot.answerCallbackQuery(query.id);
       return;
@@ -11063,6 +11161,7 @@ bot.on('message', async msg => {
   const text = msg.text;
   const photo = msg.photo;
   const video = msg.video;
+  const document = msg.document;
 
   try {
     const user = await User.findByPk(userId);
@@ -11073,6 +11172,49 @@ bot.on('message', async msg => {
     }
     let state = safeParseState(user.state);
     scheduleAutoDeleteIncomingMessage(msg, state, isAdmin(userId));
+
+    if (state?.action === 'restore_backup_file' && isAdmin(userId)) {
+      if (!document?.file_id) {
+        if (text) {
+          await bot.sendMessage(userId, await getText(userId, 'backupRestoreInvalid'), {
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: await getText(userId, 'backupCancelRestore'), callback_data: 'cancel_action' }],
+                [{ text: await getText(userId, 'back'), callback_data: 'admin' }]
+              ]
+            }
+          });
+        }
+        return;
+      }
+
+      await bot.sendMessage(userId, await getText(userId, 'backupRestoreStarted'));
+      try {
+        const fileBuffer = await downloadTelegramFile(document.file_id);
+        const payload = JSON.parse(fileBuffer.toString('utf8'));
+        const summary = await restoreDatabaseBackupFromPayload(payload);
+        await clearUserState(userId);
+        await bot.sendMessage(userId, await getText(userId, 'backupRestoreDone', {
+          created: summary.created,
+          skipped: summary.skipped,
+          errors: summary.errors
+        }), {
+          reply_markup: {
+            inline_keyboard: [[{ text: await getText(userId, 'back'), callback_data: 'admin' }]]
+          }
+        });
+      } catch (err) {
+        console.error('restore backup document error:', err.message || err);
+        await clearUserState(userId);
+        const key = err.message === 'invalid_backup_format' ? 'backupRestoreInvalid' : 'backupRestoreFailed';
+        await bot.sendMessage(userId, await getText(userId, key), {
+          reply_markup: {
+            inline_keyboard: [[{ text: await getText(userId, 'back'), callback_data: 'admin' }]]
+          }
+        });
+      }
+      return;
+    }
 
     if (msg.forward_from_chat && msg.forward_from_chat.type === 'channel') {
       const forwardedPayload = {
@@ -12877,14 +13019,10 @@ bot.on('message', async msg => {
       }
       const requestRecord = await createActivationRequestRecord(userId, merchant, email, amount, null);
       const adminNotice = await sendActivationRequestToAdmin(userId, merchant, email, amount, requestRecord);
-      const sentUserActivation = await bot.sendMessage(userId, await getText(userId, 'activationProcessingSoon', { service: await getMerchantDisplayName(merchant, userId), email, amount: formatUsdPrice(amount), time: adminNotice.timestamp }), { reply_markup: { inline_keyboard: [[{ text: await getText(userId, 'back'), callback_data: 'back_to_menu' }], [{ text: await getText(userId, 'cancel'), callback_data: 'cancel_action' }]] } });
+      const sentUserActivation = await bot.sendMessage(userId, await getText(userId, 'activationProcessingSoon', { service: await getMerchantDisplayName(merchant, userId), email, amount: formatUsdPrice(amount), time: adminNotice.timestamp }), { reply_markup: { inline_keyboard: [[{ text: await getText(userId, 'back'), callback_data: 'back_to_menu' }]] } });
       if (sentUserActivation?.message_id) {
         await safePinChatMessage(userId, sentUserActivation.message_id);
       }
-      requestRecord.adminMessageId = adminNotice.sent?.message_id || null;
-      appendActivationRequestNote(requestRecord, `admin_pin_message_id:${adminNotice.adminPinnedMessageId || 0}`);
-      appendActivationRequestNote(requestRecord, `user_pin_message_id:${sentUserActivation?.message_id || 0}`);
-      await requestRecord.save();
       await clearUserState(userId);
       return;
     }
@@ -13606,6 +13744,14 @@ sequelize.sync({ alter: true }).then(async () => {
   await getPrivateCodesChannelConfig();
   await getReferralCodesChannelConfig();
   await getBotUsername();
+
+  setInterval(async () => {
+    try {
+      await sendDatabaseBackupToAdmin('auto');
+    } catch (err) {
+      console.error('Automatic database backup error:', err.message || err);
+    }
+  }, BACKUP_INTERVAL_MS);
 
   const PORT = process.env.PORT || 3000;
   app.get('/', (req, res) => res.send('Bot is running'));
