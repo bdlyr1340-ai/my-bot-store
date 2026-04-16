@@ -607,8 +607,6 @@ const DEFAULT_TEXTS = {
     buyNow: '🛒 Buy',
     digitalSubscriptions: '🧩 Add Digital Subscriptions',
     digitalSubscriptionsMenu: '🧩 Digital Subscriptions',
-    mainDigitalSectionsButton: '📂 View',
-    digitalSectionsGroupEmpty: 'No digital sections are available right now.',
     addDigitalSectionToMainMenu: '➕ Add section to: 👋 Main menu',
     askDigitalSectionNameEn: 'Send the section name in English:',
     askDigitalSectionNameAr: 'Send the section name in Arabic:',
@@ -955,8 +953,6 @@ const DEFAULT_TEXTS = {
     buyNow: '🛒 شراء',
     digitalSubscriptions: '🧩 إضافة اشتراكات رقمية',
     digitalSubscriptionsMenu: '🧩 الاشتراكات الرقمية',
-    mainDigitalSectionsButton: '📂 عرض',
-    digitalSectionsGroupEmpty: 'لا توجد خانات رقمية متاحة حالياً.',
     addDigitalSectionToMainMenu: '➕ أضف خانة إلى: 👋 القائمة الرئيسية',
     askDigitalSectionNameEn: 'أرسل اسم الخانة بالإنجليزية:',
     askDigitalSectionNameAr: 'أرسل اسم الخانة بالعربية:',
@@ -2697,35 +2693,6 @@ async function showDigitalProductAdmin(userId, merchantId) {
       }
     }
   );
-}
-
-async function showDigitalSectionsGroupForUser(userId) {
-  const sections = await getDigitalSections();
-  if (!sections.length) {
-    await bot.sendMessage(userId, `${await getText(userId, 'digitalSubscriptionsMenu')}
-
-${await getText(userId, 'digitalSectionsGroupEmpty')}`, {
-      reply_markup: { inline_keyboard: [[{ text: await getText(userId, 'back'), callback_data: 'back_to_menu' }]] }
-    });
-    return;
-  }
-
-  const buttons = [];
-  for (const section of sections) {
-    buttons.push([{
-      text: `🧩 ${await getDigitalSectionDisplayName(section, userId)}`,
-      callback_data: `digital_section_${section.id}`
-    }]);
-  }
-
-  buttons.push([{ text: await getText(userId, 'back'), callback_data: 'back_to_menu' }]);
-
-  await bot.sendMessage(userId, `${await getText(userId, 'digitalSubscriptionsMenu')}
-
-${await getText(userId, 'digitalSectionChooseProduct')}
-${await getCurrentBalanceLineText(userId)}`, {
-    reply_markup: { inline_keyboard: buttons }
-  });
 }
 
 async function showDigitalSectionForUser(userId, sectionId) {
@@ -4973,7 +4940,6 @@ async function getMenuButtonItems(userId) {
     { id: 'ai_assistant', name: await getText(userId, 'aiAssistant') },
     { id: 'change_language', name: await getText(userId, 'changeLanguage') },
     { id: 'free_code', name: await getText(userId, 'freeCodeMenu') },
-    { id: 'digital_sections_group', name: await getText(userId, 'mainDigitalSectionsButton') },
     { id: 'admin_panel', name: await getText(userId, 'adminPanel') }
   ];
 }
@@ -5330,9 +5296,7 @@ async function showDepositOptionsAdmin(userId) {
   const visibility = await getDepositOptionVisibility();
   const keyboard = {
     inline_keyboard: [
-      [{ text: `${visibility.IQD !== false ? '✅' : '❌'} ${await getText(userId, 'depositOptionIQD')}`, callback_data: 'admin_toggle_deposit_option_IQD' }],
-      [{ text: `${visibility.USD !== false ? '✅' : '❌'} ${await getText(userId, 'depositOptionUSD')}`, callback_data: 'admin_toggle_deposit_option_USD' }],
-      [{ text: `${visibility.BINANCE_AUTO !== false ? '✅' : '❌'} ${await getText(userId, 'depositOptionBinanceAuto')}`, callback_data: 'admin_toggle_deposit_option_BINANCE_AUTO' }],
+      [{ text: `${visibility.BINANCE_AUTO ? '✅' : '❌'} ${await getText(userId, 'depositOptionBinanceAuto')}`, callback_data: 'admin_toggle_deposit_option_BINANCE_AUTO' }],
       [{ text: await getText(userId, 'back'), callback_data: 'admin_manage_deposit_settings' }]
     ]
   };
@@ -5341,38 +5305,18 @@ async function showDepositOptionsAdmin(userId) {
 
 
 // -------------------------------------------------------------------
-// تعديل showCurrencyOptions لإظهار الشحن اليدوي والبايننس الأوتوماتيكي
+// تعديل showCurrencyOptions لإضافة زر بايننس أوتوماتيكي
 async function showCurrencyOptions(userId) {
   const user = await User.findByPk(userId);
   const lang = user?.lang || 'en';
   const visibility = await getDepositOptionVisibility();
   const rows = [];
-
-  if (visibility.IQD !== false) {
-    rows.push([{ text: `💵 ${await getDepositDisplayName(userId, 'IQD')}`, callback_data: 'deposit_currency_iqd' }]);
-  }
-
-  if (visibility.USD !== false) {
-    rows.push([{ text: `💳 ${await getDepositDisplayName(userId, 'USD')}`, callback_data: 'deposit_currency_usd' }]);
-  }
-
-  if (visibility.BINANCE_AUTO !== false) {
-    rows.push([{ text: '⚡ Binance (USDT)', callback_data: 'deposit_binance_auto' }]);
-  }
-
+  if (visibility.BINANCE_AUTO !== false) rows.push([{ text: '⚡ Binance (USDT)', callback_data: 'deposit_binance_auto' }]);
   rows.push([{ text: await getText(userId, 'back'), callback_data: 'back_to_menu' }]);
 
-  const availableLines = [];
-  if (visibility.IQD !== false) availableLines.push(`• ${await getDepositDisplayName(userId, 'IQD')}`);
-  if (visibility.USD !== false) availableLines.push(`• ${await getDepositDisplayName(userId, 'USD')}`);
-  if (visibility.BINANCE_AUTO !== false) availableLines.push('• ⚡ Binance (USDT)');
-
-  const extraText = availableLines.length
-    ? `
-
-${lang === 'ar' ? 'طرق الشحن المتاحة حالياً:' : 'Available topup methods:'}
-${availableLines.join('\n')}`
-    : '';
+  const extraText = visibility.BINANCE_AUTO === false ? '' : (lang === 'ar'
+    ? '\n\nطريقة الشحن الحالية: ⚡ Binance (USDT)'
+    : '\n\nCurrent topup method: ⚡ Binance (USDT)');
 
   await bot.sendMessage(userId, `${await getText(userId, 'chooseCurrency')}${extraText}`, { reply_markup: { inline_keyboard: rows } });
 }
@@ -7440,23 +7384,18 @@ async function sendMainMenu(userId) {
     ai_assistant: await getText(userId, 'aiAssistant'),
     change_language: await getText(userId, 'changeLanguage'),
     free_code: await getText(userId, 'freeCodeMenu'),
-    digital_sections_group: await getText(userId, 'mainDigitalSectionsButton'),
     admin_panel: await getText(userId, 'adminPanel')
   };
 
   const buttons = [];
-  let addedDigitalSectionsGroupButton = false;
 
   for (const id of order) {
     const digitalSection = digitalSectionMap.get(id);
     if (digitalSection) {
-      if (!addedDigitalSectionsGroupButton && visibility.digital_sections_group !== false && digitalSections.length > 0) {
-        buttons.push([{
-          text: buttonLabels.digital_sections_group,
-          callback_data: 'digital_sections_group'
-        }]);
-        addedDigitalSectionsGroupButton = true;
-      }
+      buttons.push([{
+        text: `🧩 ${await getDigitalSectionDisplayName(digitalSection, userId)}`,
+        callback_data: `digital_section_${digitalSection.id}`
+      }]);
       continue;
     }
 
@@ -8831,11 +8770,7 @@ bot.on('callback_query', async query => {
     }
 
     if (data === 'deposit_currency_iqd' || data === 'deposit_currency_usd') {
-      const currency = data === 'deposit_currency_iqd' ? 'IQD' : 'USD';
-      await setUserState(userId, { action: 'deposit_amount', currency });
-      await bot.sendMessage(userId, await getText(userId, 'enterDepositAmount'), {
-        reply_markup: await getBackAndCancelReplyMarkup(userId, 'deposit')
-      });
+      await showBinanceAutoAmountOptions(userId);
       await cleanupPressedMessage();
       await bot.answerCallbackQuery(query.id);
       return;
@@ -10042,13 +9977,6 @@ bot.on('callback_query', async query => {
         }));
       }
       await showDigitalProductAdmin(userId, merchantId);
-      await bot.answerCallbackQuery(query.id);
-      return;
-    }
-
-    if (data === 'digital_sections_group') {
-      await showDigitalSectionsGroupForUser(userId);
-      await cleanupPressedMessage();
       await bot.answerCallbackQuery(query.id);
       return;
     }
@@ -12028,29 +11956,11 @@ bot.on('message', async msg => {
         });
         return;
       }
-      const currency = String(state.currency || 'USD').toUpperCase() === 'IQD' ? 'IQD' : 'USD';
-      await showPaymentMethodsForDeposit(userId, amount, currency);
+      await sendBinanceAutoInstructions(userId, amount);
       return;
     }
 
-    if (state?.action === 'deposit_awaiting_proof') {
-      const rawMessage = String(text || msg.caption || '').trim();
-      const imageFileId = photo ? photo[photo.length - 1].file_id : null;
-      const attachmentId = imageFileId || null;
-
-      if (!rawMessage && !attachmentId) {
-        await bot.sendMessage(userId, await getText(userId, 'depositProofReceived'));
-        return;
-      }
-
-      await requestDeposit(userId, Number(state.amount || 0), String(state.currency || 'USD').toUpperCase(), rawMessage, attachmentId, msg.from || null);
-      await clearUserState(userId);
-      await bot.sendMessage(userId, await getText(userId, 'depositProofReceived'));
-      await sendMainMenu(userId);
-      return;
-    }
-
-    if (state?.action === 'binance_auto_session' || state?.action === 'binance_auto_waiting_proof') {
+    if (state?.action === 'deposit_awaiting_proof' || state?.action === 'binance_auto_session' || state?.action === 'binance_auto_waiting_proof') {
       await clearUserState(userId);
       await bot.sendMessage(userId, await getText(userId, 'binancePayStatusExpired'));
       await showBinanceAutoAmountOptions(userId);
