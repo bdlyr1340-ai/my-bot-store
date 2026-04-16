@@ -6,13 +6,19 @@ const TelegramBot = require('node-telegram-bot-api');
 const FormData = require('form-data');
 const { Sequelize, DataTypes, Op } = require('sequelize');
 const crypto = require('crypto');
+const {
+  generateDepositNote,
+  normalizeOrderId: normalizeBinanceTransferOrderId,
+  looksLikeOrderId: looksLikeBinanceTransferOrderId,
+  verifyBinanceTransfer
+} = require('./binancePay');
 
 const TOKEN = process.env.BOT_TOKEN;
 const ADMIN_ID = parseInt(process.env.ADMIN_ID, 10);
 const DATABASE_URL = process.env.DATABASE_URL;
-const BINANCE_API_KEY = process.env.BINANCE_API_KEY;
-const BINANCE_API_SECRET = process.env.BINANCE_API_SECRET;
-const BINANCE_PAY_ID = process.env.BINANCE_PAY_ID || '842505320';
+const BINANCE_API_KEY = process.env.BINANCE_API_KEY || '';
+const BINANCE_API_SECRET = process.env.BINANCE_API_SECRET || process.env.BINANCE_SECRET_KEY || '';
+const BINANCE_PAY_ID = process.env.BINANCE_PAY_ID || process.env.BINANCE_ID || '842505320';
 const BINANCE_PAY_API_KEY = process.env.BINANCE_PAY_API_KEY || '';
 const BINANCE_PAY_SECRET_KEY = process.env.BINANCE_PAY_SECRET_KEY || '';
 const BINANCE_PAY_BASE_URL = String(process.env.BINANCE_PAY_BASE_URL || 'https://bpay.binanceapi.com').replace(/\/$/, '');
@@ -357,7 +363,7 @@ const DEFAULT_TEXTS = {
     botAdded: '✅ Bot added!',
     botRemoved: '❌ Bot removed!',
     chooseCurrency: '💱 Choose currency for deposit:',
-    currency_usd_name: 'Dollar',
+    currency_usd_name: 'Binance',
     currency_iqd_name: 'Iraqi Dinar',
     depositInstructionsUSD: '💰 Send {amount} USDT to one of the following payment methods:\n\n{methods_block}\n\nThen send a screenshot of the payment with any message.\n\n{instructions}',
     depositInstructionsIQD: '💰 Send {amountIQD} Iraqi Dinar (≈ {amountUSD} USD at rate {rate} IQD/USD) to one of the following payment methods:\n\n{methods_block}\n\nThen send a screenshot of the payment with any message.\n\n{instructions}',
@@ -758,7 +764,7 @@ const DEFAULT_TEXTS = {
     botAdded: '✅ تمت إضافة البوت!',
     botRemoved: '❌ تم حذف البوت!',
     chooseCurrency: '💱 اختر العملة للشحن:',
-    currency_usd_name: 'دولار',
+    currency_usd_name: 'بايننس',
     currency_iqd_name: 'دينار عراقي',
     depositInstructionsUSD: '💰 قم بإرسال {amount} USDT إلى إحدى طرق الدفع التالية:\n\n{methods_block}\n\nثم أرسل صورة التحويل مع أي رسالة.\n\n{instructions}',
     depositInstructionsIQD: '💰 قم بإرسال {amountIQD} دينار عراقي (≈ {amountUSD} دولار بسعر صرف {rate} دينار/دولار) إلى إحدى طرق الدفع التالية:\n\n{methods_block}\n\nثم أرسل صورة التحويل مع أي رسالة.\n\n{instructions}',
@@ -1394,7 +1400,7 @@ Object.assign(DEFAULT_TEXTS.en, {
   depositSendProofNow: '📸 Send the payment proof now for {method}. You can send a screenshot, photo, video, or a written note.',
   depositProofRequired: '❌ Please send the payment proof now.',
   depositTapDoneFirst: '✅ After you pay, press the Done button first, then send the proof.',
-  binanceRemoved: '⛔ Binance payment has been removed from this version.',
+  binanceRemoved: '⚡ Binance (Auto)',
   enterMethodTypePrompt: 'Send the payment method type: manual',
   enterMethodTypeInvalid: '❌ The method type must be manual.',
   depositLimitsUpdated: '✅ Deposit limits updated. Minimum: {min}$ | Maximum: {max}$',
@@ -1412,43 +1418,13 @@ Object.assign(DEFAULT_TEXTS.ar, {
   depositSendProofNow: '📸 أرسل إثبات الدفع الآن لطريقة {method}. يمكنك إرسال صورة أو فيديو أو ملاحظة مكتوبة.',
   depositProofRequired: '❌ أرسل إثبات الدفع الآن.',
   depositTapDoneFirst: '✅ بعد أن تدفع اضغط أولاً على زر تم ثم أرسل الإثبات.',
-  binanceRemoved: '⛔ تم حذف طريقة دفع بايننس من هذه النسخة.',
+  binanceRemoved: '⚡ Binance (Auto)',
   enterMethodTypePrompt: 'أرسل نوع طريقة الدفع: manual',
   enterMethodTypeInvalid: '❌ نوع الطريقة يجب أن يكون manual فقط.',
   depositLimitsUpdated: '✅ تم تحديث حدود الشحن. الحد الأدنى: {min}$ | الحد الأعلى: {max}$',
   methodNotFound: '❌ طريقة الدفع غير موجودة.',
   manageUSDMethods: 'إدارة طرق الدفع بالدولار',
   paymentMethods: '💳 طرق الدفع'
-});
-
-Object.assign(DEFAULT_TEXTS.en, {
-  binanceTransferNotConfigured: '⚠️ Binance transfer verification is not configured yet. Please set BINANCE_API_KEY, BINANCE_API_SECRET, and BINANCE_PAY_ID.',
-  binanceTransferInstructions: '✅ <b>Order created.</b>\n\n💰 <b>Send:</b> <b>{amount} USDT</b>\n\n🆔 <b>To Binance ID</b>\n\n<code>{payId}</code>\n\n⚠️ <b>Very important for payment confirmation:</b>\n\nYou must write this code:\n\n<code>{note}</code>\n\nin the note field during the transfer.',
-  binanceTransferCheckButton: '✅ I completed the transfer',
-  binanceTransferManualPrompt: 'Send the Order ID now to verify the transfer manually.',
-  binanceTransferChecking: '⏳ Checking your Binance payment, please wait a few seconds...',
-  binanceTransferNoPending: '❌ You do not have a pending Binance deposit request. Start a new topup first.',
-  binanceTransferDuplicate: '❌ This transaction or code has already been used before.',
-  binanceTransferVerified: '✅ <b>Payment verified successfully.</b>\n\n💰 Added: <b>{amount} USDT</b>\n💳 New balance: <b>{balance} USD</b>',
-  binanceTransferCheckByNotePending: '⏳ No matching payment was found yet using the transfer note. If you already paid, send the Order ID from Binance to verify manually.',
-  binanceTransferNotFound: '❌ No matching Binance transfer was found for this Order ID. Please make sure the number is correct.',
-  binanceTransferOrderIdExpired: '⌛ This Order ID is too old for verification. Please create a new deposit request and pay again.',
-  chooseBinanceDepositAmount: '⚡ Choose the Binance deposit amount:'
-});
-
-Object.assign(DEFAULT_TEXTS.ar, {
-  binanceTransferNotConfigured: '⚠️ التحقق من تحويلات بايننس غير مهيأ بعد. يرجى ضبط BINANCE_API_KEY و BINANCE_API_SECRET و BINANCE_PAY_ID.',
-  binanceTransferInstructions: '✅ <b>تم إنشاء الطلب.</b>\n\n💰 <b>قم بأرسال :</b> <b>{amount} USDT</b>\n\n🆔 <b>إلى معرف بايننس</b>\n\n<code>{payId}</code>\n\n⚠️ <b>هام جدًا لتأكيد الدفع:</b>\n\nيجب عليك كتابة هذا الكود:\n\n<code>{note}</code>\n\nفي خانة الملاحظات (Note) عند التحويل.',
-  binanceTransferCheckButton: '✅ أكملت التحويل',
-  binanceTransferManualPrompt: 'أرسل Order ID الآن للتحقق من التحويل يدويًا.',
-  binanceTransferChecking: '⏳ جاري التحقق من دفعتك في بايننس، يرجى الانتظار بضع ثوانٍ...',
-  binanceTransferNoPending: '❌ ليس لديك طلب إيداع بايننس قيد الانتظار. ابدأ طلب شحن جديد أولاً.',
-  binanceTransferDuplicate: '❌ هذه العملية أو هذا الكود تم استخدامه مسبقًا.',
-  binanceTransferVerified: '✅ <b>تم التحقق من الدفع بنجاح.</b>\n\n💰 تمت إضافة: <b>{amount} USDT</b>\n💳 رصيدك الجديد: <b>{balance} USD</b>',
-  binanceTransferCheckByNotePending: '⏳ لم يتم العثور على دفعة مطابقة بعد باستخدام كود الملاحظة. إذا كنت قد دفعت بالفعل، فأرسل Order ID من بايننس للتحقق يدويًا.',
-  binanceTransferNotFound: '❌ لم يتم العثور على تحويل بايننس مطابق لهذا الـ Order ID. تأكد من الرقم ثم حاول مرة أخرى.',
-  binanceTransferOrderIdExpired: '⌛ هذا الـ Order ID قديم جدًا للتحقق. أنشئ طلب إيداع جديد ثم أعد الدفع.',
-  chooseBinanceDepositAmount: '⚡ اختر مبلغ الشحن عبر بايننس:'
 });
 
 Object.assign(DEFAULT_TEXTS.en, {
@@ -6064,12 +6040,33 @@ async function getDepositMethodNameForUser(userId, currency, index) {
     : (selected.method.nameEn || selected.method.nameAr || '');
 }
 
+async function showCurrencyOptions(userId) {
+  const user = await User.findByPk(userId);
+  const lang = user?.lang || 'en';
+  const visibility = await getDepositOptionVisibility();
+  const rows = [];
+  if (visibility.BINANCE_AUTO !== false) rows.push([{ text: '⚡ Binance (USDT)', callback_data: 'deposit_binance_auto' }]);
+  rows.push([{ text: await getText(userId, 'back'), callback_data: 'back_to_menu' }]);
+
+  const extraText = visibility.BINANCE_AUTO === false ? '' : (lang === 'ar'
+    ? '\n\nطريقة الشحن الحالية: ⚡ Binance (USDT)'
+    : '\n\nCurrent topup method: ⚡ Binance (USDT)');
+
+  await bot.sendMessage(userId, `${await getText(userId, 'chooseCurrency')}${extraText}`, { reply_markup: { inline_keyboard: rows } });
+}
+
 async function showBinanceAutoAmountOptions(userId) {
+  const user = await User.findByPk(userId);
+  const lang = user?.lang || 'en';
   const amounts = [1, 5, 10, 20, 35];
   const buttons = amounts.map(amount => ([{ text: `${amount}$`, callback_data: `deposit_binance_amount_${amount}` }]));
   buttons.push([{ text: await getText(userId, 'back'), callback_data: 'deposit' }]);
 
-  await bot.sendMessage(userId, await getText(userId, 'chooseBinanceDepositAmount'), {
+  const msg = lang === 'ar'
+    ? '⚡ اختر مبلغ الشحن عبر بايننس:'
+    : '⚡ Choose the Binance deposit amount:';
+
+  await bot.sendMessage(userId, msg, {
     reply_markup: { inline_keyboard: buttons }
   });
 }
@@ -6086,6 +6083,10 @@ async function getBinanceTransferReplyMarkup(userId) {
   };
 }
 
+async function sendLegacyBinanceAutoInstructions(userId, amount) {
+  return sendBinanceAutoInstructions(userId, amount);
+}
+
 async function sendBinanceAutoInstructions(userId, amount) {
   const credentials = await getBinanceCredentials();
   if (!credentials?.apiKey || !credentials?.apiSecret || !credentials?.payId) {
@@ -6093,11 +6094,11 @@ async function sendBinanceAutoInstructions(userId, amount) {
     return;
   }
 
-  const note = generateBinanceNoteCode(userId);
+  const note = generateDepositNote();
   const normalizedAmount = formatUsdPrice(amount);
 
   await setUserState(userId, {
-    action: 'binance_auto_session',
+    action: 'binance_transfer_pending',
     amount: Number(amount),
     currency: 'USDT',
     note,
@@ -6115,112 +6116,9 @@ async function sendBinanceAutoInstructions(userId, amount) {
     parse_mode: 'HTML',
     reply_markup: await getBinanceTransferReplyMarkup(userId)
   });
+
 }
 
-async function showCurrencyOptions(userId) {
-  const visibility = await getDepositOptionVisibility();
-  const rows = [];
-
-  if (visibility.BINANCE_AUTO !== false) {
-    rows.push([{ text: '⚡ Binance (USDT)', callback_data: 'deposit_binance_auto' }]);
-  }
-
-  for (const currency of ['IQD', 'USD']) {
-    if (visibility[currency] === false) continue;
-    const config = await getDepositConfig(currency);
-    const methods = normalizeDepositMethods(config.methods);
-    for (let i = 0; i < methods.length; i += 1) {
-      const methodName = await getDepositMethodNameForUser(userId, currency, i);
-      if (!methodName) continue;
-      rows.push([{ text: `💳 ${methodName}`, callback_data: `deposit_pick_${currency}_${i}` }]);
-    }
-  }
-
-  if (!rows.length) {
-    await bot.sendMessage(userId, await getText(userId, 'noMethods'), {
-      reply_markup: { inline_keyboard: [[{ text: await getText(userId, 'back'), callback_data: 'back_to_menu' }]] }
-    });
-    return;
-  }
-
-  rows.push([{ text: await getText(userId, 'back'), callback_data: 'back_to_menu' }]);
-
-  await bot.sendMessage(userId, await getText(userId, 'chooseDepositMethodType'), {
-    reply_markup: { inline_keyboard: rows }
-  });
-}
-
-async function showDepositAmountOptionsForMethod(userId, currency, index) {
-  const methodName = await getDepositMethodNameForUser(userId, currency, index);
-  if (!methodName) {
-    await bot.sendMessage(userId, await getText(userId, 'error'));
-    return;
-  }
-
-  const buttons = DEPOSIT_PRESET_AMOUNTS.map(amount => ([{ text: `${amount}$`, callback_data: `deposit_amount_${currency}_${index}_${amount}` }]));
-  buttons.push([{ text: await getText(userId, 'back'), callback_data: 'deposit' }]);
-
-  await bot.sendMessage(userId, await getText(userId, 'chooseDepositAmountForMethod', { method: methodName }), {
-    reply_markup: { inline_keyboard: buttons }
-  });
-}
-
-async function sendSelectedDepositMethodInstructions(userId, currency, index, amount) {
-  const selected = await getDepositMethodByIndex(currency, index);
-  if (!selected?.method) {
-    await bot.sendMessage(userId, await getText(userId, 'error'));
-    return;
-  }
-
-  const user = await User.findByPk(userId);
-  const lang = user?.lang === 'ar' ? 'ar' : 'en';
-  const config = selected.config;
-  const method = selected.method;
-  const usdAmount = Number(amount);
-  const iqdAmount = currency === 'IQD'
-    ? Number(usdAmount * Number(config.rate || 1500)).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
-    : null;
-  const methodName = lang === 'ar'
-    ? (method.nameAr || method.nameEn || '')
-    : (method.nameEn || method.nameAr || '');
-  const methodDetails = String(method.value || '').trim();
-  const createdAt = Date.now();
-
-  const messageText = currency === 'IQD'
-    ? await getText(userId, 'depositMethodInstructionsIQD', {
-      method: methodName,
-      amountUSD: formatUsdPrice(usdAmount),
-      amountIQD: iqdAmount,
-      rate: formatUsdPrice(config.rate || 1500),
-      details: methodDetails,
-      time: formatAdminDateTime(createdAt)
-    })
-    : await getText(userId, 'depositMethodInstructionsUSD', {
-      method: methodName,
-      amountUSD: formatUsdPrice(usdAmount),
-      details: methodDetails,
-      time: formatAdminDateTime(createdAt)
-    });
-
-  await bot.sendMessage(userId, messageText, {
-    parse_mode: 'HTML',
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: await getText(userId, 'donePayment'), callback_data: 'deposit_done_send_proof' }],
-        [{ text: await getText(userId, 'back'), callback_data: `deposit_pick_${currency}_${index}` }],
-        [{ text: await getText(userId, 'cancel'), callback_data: 'cancel_action' }]
-      ]
-    }
-  });
-
-  await setUserState(userId, {
-    action: 'deposit_waiting_done',
-    currency,
-    methodIndex: Number(index),
-    amountUSD: usdAmount,
-    createdAt
-  });
-}
 
 async function showPaymentMethodsForDeposit(userId, amount, currency) {
   await showCurrencyOptions(userId);
@@ -7920,192 +7818,182 @@ function buildBinanceDuplicateCandidates(rawInput, checkResult = {}) {
   return [...new Set(values.map(normalizeBinanceIdentifier).filter(Boolean))];
 }
 
-async function checkBinanceDeposit(orderNumber, expectedAmountUSDT, options = {}) {
-  const credentials = await getBinanceCredentials();
-  if (!credentials?.apiKey || !credentials?.apiSecret) {
-    console.error('❌ Binance API keys missing');
-    return { success: false, reason: 'binance_not_configured' };
+async function reconcilePendingBinanceTransferOrders() {
+  const users = await User.findAll({ where: { state: { [Op.like]: '%binance_transfer_pending%' } }, attributes: ['id', 'state'] }).catch(() => []);
+  for (const user of users || []) {
+    const state = safeParseState(user.state);
+    if (state?.action !== 'binance_transfer_pending') continue;
+    try {
+      await processBinanceAutoVerification(user.id, state, { rawInput: '', silent: true });
+    } catch (err) {
+      console.error(`Binance transfer reconcile error for user ${user.id}:`, err.message);
+    }
   }
-
-  const expected = Number(expectedAmountUSDT || 0);
-  const wantedIdentifier = normalizeBinanceIdentifier(orderNumber);
-  if (!wantedIdentifier || !Number.isFinite(expected) || expected <= 0) {
-    return { success: false, reason: 'invalid_payload' };
-  }
-
-  const fetched = await fetchCandidateBinanceTransactionsFast(credentials, options.sessionCreatedAt);
-  if (!fetched.ok) {
-    return { success: false, reason: 'api_error', error: fetched.error || null };
-  }
-
-  const rows = fetched.rows || [];
-  const matchedRows = rows.filter(item => (
-    doesBinanceAmountMatch(item, expected)
-    && isLikelyIncomingBinancePayment(item, credentials.payId || null)
-    && itemMatchesBinanceOrder(item, wantedIdentifier)
-  ));
-
-  if (matchedRows.length === 1) {
-    const matchedItem = matchedRows[0];
-    return {
-      success: true,
-      method: 'exact_order_id',
-      amount: getBinanceHistoryAmountUSDT(matchedItem),
-      txId: matchedItem.transactionId || matchedItem.orderId || matchedItem.prepayId || getBinanceTransactionUniqueKey(matchedItem) || orderNumber,
-      rawOrderId: orderNumber,
-      currency: 'USDT',
-      transactionTime: getBinanceTransactionTime(matchedItem) || getBinanceClientNowMs(),
-      orderType: matchedItem.orderType || null,
-      payId: credentials.payId || null,
-      matchedItem,
-      searchedRows: rows.length,
-      matchedRows: matchedRows.length,
-      amountMatchedRows: matchedRows.length,
-      payIdMatchedRows: matchedRows.length,
-      matchScore: 100
-    };
-  }
-
-  return {
-    success: false,
-    reason: matchedRows.length > 1 ? 'ambiguous_match' : 'no_match',
-    searchedRows: rows.length,
-    matchedRows: matchedRows.length,
-    amountMatchedRows: matchedRows.length,
-    payIdMatchedRows: matchedRows.length,
-    payId: credentials.payId || null
-  };
 }
 
 async function processBinanceAutoVerification(userId, state, options = {}) {
   const user = await User.findByPk(userId);
   if (!user) return { handled: false };
 
-  const expectedAmount = Number(state?.amount || 0);
-  const rawInput = String(options.rawInput || '').trim();
-  const normalizedInput = normalizeBinanceIdentifier(rawInput);
   const lang = user.lang === 'ar' ? 'ar' : 'en';
+  const expectedAmount = Number(state?.amount || 0);
+  const note = String(state?.note || '').trim();
+  const rawInput = String(options.rawInput || '').trim();
+  const normalizedInput = looksLikeBinanceTransferOrderId(rawInput) ? normalizeBinanceTransferOrderId(rawInput) : '';
 
-  const duplicateCandidates = [...new Set([normalizedInput].filter(Boolean))];
+  if (!Number.isFinite(expectedAmount) || expectedAmount <= 0 || !note) {
+    await clearUserState(userId);
+    await bot.sendMessage(userId, await getText(userId, 'binanceTransferNoPending'));
+    return { handled: true, success: false, reason: 'invalid_state' };
+  }
 
-  if (duplicateCandidates.length) {
+  if (normalizedInput) {
     const existing = await BalanceTransaction.findOne({
       where: {
         type: 'deposit',
         status: 'completed',
-        txid: { [Op.in]: duplicateCandidates }
+        txid: normalizedInput
       }
     });
 
     if (existing) {
-      await bot.sendMessage(userId, lang === 'ar'
-        ? '❌ هذه العملية أو هذا الكود تم استخدامه مسبقًا.'
-        : '❌ This transaction or code has already been used before.');
+      await bot.sendMessage(userId, await getText(userId, 'binanceTransferDuplicate'));
       return { handled: true, success: false, reason: 'duplicate_tx' };
     }
   }
 
-  const checkResult = await checkBinanceDeposit(rawInput, expectedAmount, {
-    sessionCreatedAt: state?.createdAt,
-    userId
+  const credentials = await getBinanceCredentials();
+  if (!credentials?.apiKey || !credentials?.apiSecret || !(state?.payId || credentials?.payId)) {
+    await bot.sendMessage(userId, await getText(userId, 'binanceTransferNotConfigured'));
+    return { handled: true, success: false, reason: 'binance_not_configured' };
+  }
+
+  if (!options.silent) {
+    await bot.sendMessage(userId, await getText(userId, 'binanceTransferChecking'));
+  }
+
+  const checkResult = await verifyBinanceTransfer({
+    apiKey: credentials.apiKey,
+    apiSecret: credentials.apiSecret,
+    payId: state?.payId || credentials?.payId || '',
+    expectedAmount,
+    expectedNote: note,
+    orderIdToCheck: normalizedInput || '',
+    sessionCreatedAt: state?.createdAt || null,
+    recentWindowMs: normalizedInput ? (60 * 60 * 1000) : undefined
   });
 
-  if (checkResult.success) {
-    const txDuplicateKeys = buildBinanceDuplicateCandidates(rawInput, checkResult);
-    const txDuplicate = txDuplicateKeys.length
-      ? await BalanceTransaction.findOne({
-        where: {
-          type: 'deposit',
-          status: 'completed',
-          txid: { [Op.in]: txDuplicateKeys }
-        }
-      })
-      : null;
-
-    if (txDuplicate) {
-      await bot.sendMessage(userId, lang === 'ar'
-        ? '❌ هذه العملية مستخدمة مسبقًا.'
-        : '❌ This transaction has already been used before.');
-      return { handled: true, success: false, reason: 'duplicate_tx' };
+  if (!checkResult.success) {
+    if (options.silent) {
+      return { handled: true, success: false, reason: checkResult.reason || 'not_found' };
     }
+    if (checkResult.reason === 'api_error') {
+      await bot.sendMessage(userId, getBinanceVerificationFailureReason('api_error', lang));
+    } else if (checkResult.reason === 'expired_order_id') {
+      await bot.sendMessage(userId, await getText(userId, 'binanceTransferOrderIdExpired'), {
+        reply_markup: await getBinanceTransferReplyMarkup(userId)
+      });
+    } else if (!normalizedInput) {
+      await bot.sendMessage(userId, await getText(userId, 'binanceTransferCheckByNotePending'), {
+        reply_markup: await getBinanceTransferReplyMarkup(userId)
+      });
+    } else {
+      await bot.sendMessage(userId, await getText(userId, 'binanceTransferNotFound'), {
+        reply_markup: await getBinanceTransferReplyMarkup(userId)
+      });
+    }
+    return { handled: true, success: false, reason: checkResult.reason || 'not_found' };
+  }
 
-    const txKey = txDuplicateKeys[0] || normalizedInput;
-    const t = await sequelize.transaction();
-    try {
-      const freshUser = await User.findByPk(userId, { transaction: t, lock: t.LOCK.UPDATE });
-      const newBalance = parseFloat(freshUser.balance || 0) + expectedAmount;
+  if (normalizedInput) {
+    const ageMs = Math.max(0, Date.now() - Number(checkResult.transactionTime || 0));
+    if (!Number.isFinite(ageMs) || ageMs > (60 * 60 * 1000)) {
+      await bot.sendMessage(userId, await getText(userId, 'binanceTransferOrderIdExpired'), {
+        reply_markup: await getBinanceTransferReplyMarkup(userId)
+      });
+      return { handled: true, success: false, reason: 'expired_order_id' };
+    }
+  }
 
-      await User.update({ balance: newBalance }, { where: { id: userId }, transaction: t });
-      await BalanceTransaction.create({
-        userId,
-        amount: expectedAmount,
+  const matchedOrderId = normalizeBinanceTransferOrderId(checkResult.orderId || normalizedInput || '');
+  const duplicateKey = matchedOrderId || normalizedInput || note;
+
+  const t = await sequelize.transaction();
+  try {
+    const freshUser = await User.findByPk(userId, { transaction: t, lock: t.LOCK.UPDATE });
+    const existingDeposit = await BalanceTransaction.findOne({
+      where: {
         type: 'deposit',
         status: 'completed',
-        txid: txKey,
-        caption: `Binance Auto | method=${checkResult.method} | input=${rawInput || '-'} | tx=${checkResult.txId || '-'} | payId=${checkResult.payId || '-'} | amount=${expectedAmount} | searched=${checkResult.searchedRows || 0} | matched=${checkResult.matchedRows || 0}`
-      }, { transaction: t });
+        txid: duplicateKey
+      },
+      transaction: t,
+      lock: t.LOCK.UPDATE
+    });
 
-      await t.commit();
-
-      const successText = lang === 'ar'
-        ? `✅ تم التحقق من الدفع بنجاح عبر ${checkResult.method}. تمت إضافة ${expectedAmount}$ إلى رصيدك.
-
-رصيدك الجديد: ${newBalance.toFixed(2)}$`
-        : `✅ Payment verified successfully via ${checkResult.method}. ${expectedAmount}$ has been added to your balance.
-
-New balance: ${newBalance.toFixed(2)}$`;
-      await bot.sendMessage(userId, successText);
-
-      const identity = await getTelegramIdentityById(userId);
-      await bot.sendMessage(ADMIN_ID,
-        `💰 Binance Auto Deposit
-
-` +
-        `Name: ${identity.fullName}
-` +
-        `Username: ${identity.usernameText}
-` +
-        `ID: ${userId}
-` +
-        `Amount: ${expectedAmount} USD
-` +
-        `Order ID: ${rawInput || '-'}
-` +
-        `Matched Tx ID: ${checkResult.txId || '-'}
-` +
-        `Method: ${checkResult.method}
-` +
-        `Binance ID: ${checkResult.payId || BINANCE_PAY_ID || '-'}
-` +
-        `Rows: ${checkResult.searchedRows || 0} | Matches: ${checkResult.matchedRows || 0}`
-      ).catch(() => {});
-
-      await clearUserState(userId);
-      await sendMainMenu(userId);
-      return { handled: true, success: true };
-    } catch (err) {
+    if (existingDeposit) {
       await t.rollback().catch(() => {});
-      console.error('processBinanceAutoVerification transaction error:', err);
-      await bot.sendMessage(userId, lang === 'ar'
-        ? '❌ حدث خطأ أثناء إضافة الرصيد. حاول مرة أخرى أو تواصل مع الدعم.'
-        : '❌ An error occurred while adding the balance. Please try again or contact support.');
-      return { handled: true, success: false, reason: 'db_error' };
+      await bot.sendMessage(userId, await getText(userId, 'binanceTransferDuplicate'));
+      return { handled: true, success: false, reason: 'duplicate_tx' };
     }
+
+    const paymentMethod = await getOrCreateBinanceTransferPaymentMethod(t);
+    const newBalance = parseFloat(freshUser.balance || 0) + expectedAmount;
+
+    await User.update({ balance: newBalance }, { where: { id: userId }, transaction: t });
+    await BalanceTransaction.create({
+      userId,
+      amount: expectedAmount,
+      type: 'deposit',
+      paymentMethodId: paymentMethod.id,
+      status: 'completed',
+      txid: duplicateKey,
+      caption: `Binance | method=${checkResult.method} | note=${note} | input=${rawInput || '-'} | orderId=${matchedOrderId || '-'} | payId=${state?.payId || credentials?.payId || '-'} | amount=${expectedAmount} | searched=${checkResult.searchedRows || 0}`
+    }, { transaction: t });
+
+    await t.commit();
+
+    await clearUserState(userId);
+    await bot.sendMessage(userId, await getText(userId, 'binanceTransferVerified', {
+      amount: escapeHtml(formatUsdPrice(expectedAmount)),
+      balance: escapeHtml(newBalance.toFixed(2))
+    }), { parse_mode: 'HTML' });
+
+    const identity = await getTelegramIdentityById(userId);
+    await bot.sendMessage(ADMIN_ID,
+      `💰 Binance Deposit
+
+` +
+      `Name: ${identity.fullName}
+` +
+      `Username: ${identity.usernameText}
+` +
+      `ID: ${userId}
+` +
+      `Amount: ${formatUsdPrice(expectedAmount)} USDT
+` +
+      `Order ID: ${matchedOrderId || '-'}
+` +
+      `Note: ${note}
+` +
+      `Method: ${checkResult.method}
+` +
+      `Binance ID: ${state?.payId || credentials?.payId || BINANCE_PAY_ID || '-'}
+` +
+      `Rows searched: ${checkResult.searchedRows || 0}
+`
+    ).catch(() => {});
+
+    await sendMainMenu(userId);
+    return { handled: true, success: true, orderId: matchedOrderId || duplicateKey };
+  } catch (err) {
+    await t.rollback().catch(() => {});
+    console.error('processBinanceAutoVerification transaction error:', err);
+    await bot.sendMessage(userId, lang === 'ar'
+      ? '❌ حدث خطأ أثناء إضافة الرصيد. حاول مرة أخرى أو تواصل مع الدعم.'
+      : '❌ An error occurred while adding the balance. Please try again or contact support.');
+    return { handled: true, success: false, reason: 'db_error' };
   }
-
-  await setUserState(userId, {
-    action: 'binance_auto_waiting_proof',
-    amount: expectedAmount,
-    orderId: rawInput || '',
-    createdAt: state?.createdAt || Date.now()
-  });
-
-  const failedText = lang === 'ar'
-    ? '❌ فشل التحقق.\n\nقم بإرسال صورة الدفع هنا.\n\nوسيقوم الأدمن بمراجعتها.'
-    : '❌ Verification failed.\n\nPlease send the payment screenshot here.\n\nThe admin will review it.';
-
-  await bot.sendMessage(userId, failedText);
-  return { handled: true, success: false, reason: checkResult.reason };
 }
 
 async function sendMainMenu(userId) {
@@ -9782,7 +9670,7 @@ bot.on('callback_query', async query => {
 
     if (data === 'binance_transfer_prompt_order_id') {
       const currentState = safeParseState((await User.findByPk(userId)).state);
-      if (!(currentState?.action === 'binance_auto_session' || currentState?.action === 'binance_transfer_pending')) {
+      if (currentState?.action !== 'binance_transfer_pending') {
         await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'binanceTransferNoPending') });
         return;
       }
@@ -9820,6 +9708,7 @@ bot.on('callback_query', async query => {
       }
       return;
     }
+
 
 
     if ((data === 'admin_manage_bots' || data === 'admin_add_merchant' || data === 'admin_list_merchants' || data === 'admin_set_chatgpt_price' || data === 'admin_manage_channel' || data === 'admin_private_codes_channel' || data === 'admin_import_referral_stock_from_private_channel' || data === 'admin_referral_codes_channel') && isAdmin(userId)) {
@@ -12933,6 +12822,39 @@ bot.on('message', async msg => {
     }
 
 
+    if (state?.action === 'binance_transfer_pending') {
+      if (photo || video) {
+        await bot.sendMessage(userId, await getText(userId, 'binanceTransferHelp'), {
+          reply_markup: await getBinanceTransferReplyMarkup(userId)
+        });
+        return;
+      }
+
+      const trimmedText = String(text || '').trim();
+      const claimMatch = trimmedText.match(/^\/claim(?:@\w+)?(?:\s+(.+))?$/i);
+      const claimOrderId = claimMatch?.[1] ? claimMatch[1].trim() : '';
+      const providedOrderId = looksLikeBinanceTransferOrderId(claimOrderId)
+        ? claimOrderId
+        : (looksLikeBinanceTransferOrderId(trimmedText) ? trimmedText : '');
+
+      if (providedOrderId && state.awaitingManualOrderId) {
+        state.awaitingManualOrderId = false;
+        await setUserState(userId, state);
+        await processBinanceAutoVerification(userId, state, { rawInput: providedOrderId });
+        return;
+      }
+
+      if (providedOrderId) {
+        return;
+      }
+
+      await bot.sendMessage(userId, await getText(userId, 'binanceTransferHelp'), {
+        reply_markup: await getBinanceTransferReplyMarkup(userId)
+      });
+      return;
+    }
+
+
     if (state?.action === 'binance_auto_waiting_proof') {
       await clearUserState(userId);
       await bot.sendMessage(userId, await getText(userId, 'binancePayStatusExpired'));
@@ -13266,31 +13188,18 @@ bot.on('message', async msg => {
     }
 
     if (state?.action === 'deposit_amount') {
-      await clearUserState(userId);
-      await showCurrencyOptions(userId);
-      return;
-    }
-
-    if (state?.action === 'binance_auto_session') {
-      const trimmed = String(text || '').trim();
-      const normalized = normalizeAssistantText(trimmed);
-      const hasManualOrderId = Boolean(state.awaitingManualOrderId && trimmed);
-      const shouldCheckByNote = !trimmed || /(done|paid|check|verify|تحقق|تم|دفعت|اكتمل)/i.test(normalized);
-
-      if (hasManualOrderId || shouldCheckByNote) {
-        const result = await processBinanceAutoVerification(userId, state, {
-          rawInput: hasManualOrderId ? trimmed : ''
+      const amount = parseFloat(text);
+      if (Number.isNaN(amount) || amount <= 0) {
+        await bot.sendMessage(userId, await getText(userId, 'enterDepositAmount'), {
+          reply_markup: await getBackAndCancelReplyMarkup(userId, 'deposit')
         });
-        if (result?.handled) return;
+        return;
       }
-
-      await bot.sendMessage(userId, await getText(userId, 'binanceTransferCheckByNotePending'), {
-        reply_markup: await getBinanceTransferReplyMarkup(userId)
-      });
+      await sendBinanceAutoInstructions(userId, amount);
       return;
     }
 
-    if (state?.action === 'binance_auto_waiting_proof') {
+    if (state?.action === 'deposit_awaiting_proof' || state?.action === 'binance_auto_session' || state?.action === 'binance_auto_waiting_proof') {
       await clearUserState(userId);
       await bot.sendMessage(userId, await getText(userId, 'binancePayStatusExpired'));
       await showBinanceAutoAmountOptions(userId);
