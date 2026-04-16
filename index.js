@@ -402,7 +402,7 @@ const DEFAULT_TEXTS = {
     redeemPoints: '🎁 Redeem Points',
     getFreeCode: '🎁 Get your free code',
     freeCodeMenu: '🎁 Get your free code',
-    referralInfo: 'Share your referral link with friends and earn 1 point per successful referral!\n\nYour referral link:\n<code>{link}</code>\n\nYour points: {points}\nYou can get {redeemableCodes} code(s) with your points.\n🎁 Every {requiredPoints} points = 1 free ChatGPT code!',
+    referralInfo: 'Share your referral link with friends and earn 1 point plus {giftAmount} USD balance for each successful referral!\n\nYour referral link:\n<code>{link}</code>\n\nYour points: {points}\nYou can get {redeemableCodes} code(s) with your points.\n🎁 Every {requiredPoints} points = 1 free ChatGPT code!',
     referralEarned: '🎉 You earned 1 referral point! Total points: {points}',
     notEnoughPoints: '❌ You do not have enough points. You have {points} points, and each code needs {requiredPoints} points.',
     redeemPointsAskAmount: 'Send the number of ChatGPT codes you want to redeem using your points. Each code costs {requiredPoints} points.',
@@ -770,7 +770,7 @@ const DEFAULT_TEXTS = {
     redeemPoints: '🎁 استبدال النقاط',
     getFreeCode: '🎁 احصل على كودك المجاني',
     freeCodeMenu: '🎁 احصل على كودك المجاني',
-    referralInfo: 'شارك رابط الإحالة الخاص بك مع أصدقائك واربح نقطة واحدة لكل إحالة ناجحة!\n\nرابطك:\n<code>{link}</code>\n\nنقاطك: {points}\n🎁 استبدل {requiredPoints} نقاط للحصول على كود ChatGPT مجاناً!',
+    referralInfo: 'شارك رابط الإحالة الخاص بك مع أصدقائك واربح نقطة واحدة + {giftAmount} دولار رصيد لكل إحالة ناجحة!\n\nرابطك:\n<code>{link}</code>\n\nنقاطك: {points}\nيمكنك الحصول على {redeemableCodes} كود/أكواد من نقاطك.\n🎁 استبدل {requiredPoints} نقاط للحصول على كود ChatGPT مجاناً!',
     referralEarned: '🎉 لقد ربحت نقطة إحالة! إجمالي النقاط: {points}',
     notEnoughPoints: '❌ لا تملك نقاطًا كافية. لديك {points} نقطة، وكل كود يحتاج {requiredPoints} نقاط.',
     redeemPointsAskAmount: 'أرسل عدد كودات ChatGPT التي تريد أخذها بالنقاط. كل كود يحتاج {requiredPoints} نقاط.',
@@ -1041,7 +1041,7 @@ Object.assign(DEFAULT_TEXTS.en, {
   productDescriptionLine: 'Description: {description}',
   invalidBulkStockPairs: '❌ Bulk stock must be sent as pairs: email on one line and password on the next line.',
   emptyStockInput: '❌ Please send the stock/accounts first.',
-  digitalProductManageText: '🧾 {name}\nPrice: {price} USD\nRemaining stock: {stock}\nType: {type}\nAdded at: {createdAt}\nDescription: {description}',
+  digitalProductManageText: '🧾 {name}\nPrice: {price} USD\nRemaining stock: {stock}\nType: {type}\nAdded at: {createdAt}\nMain screen: {mainScreenStatus}\nDescription: {description}',
   buyNow: '🛒 Buy Now',
   digitalStockBroadcastToggleOn: '📣 Stock notification: ✅ ON',
   digitalStockBroadcastToggleOff: '📣 Stock notification: ❌ OFF',
@@ -1091,7 +1091,20 @@ Object.assign(DEFAULT_TEXTS.en, {
   supportUserMessageForwarded: '📨 Your message was delivered to support.',
   supportThreadAdminNotice: '📩 Live support message\n\nUsername: {username}\nName: {name}\nUser ID: {userId}\n\nMessage: {message}',
   digitalStockInputPrompt: 'Send the stock/accounts now.\n\nQuick formats supported:\nemail|password\nemail | password\nemail|password|verification\nemail|password|verification|extra note\n\nYou can also use the button below to add one account step by step.',
-  digitalProductListButton: '{name} - {price} USD | Available {stock}'
+  digitalProductListButton: '{name} - {price} USD | Available {stock}',
+  mainScreenDigitalProductButton: '{name} - {price} USD | Available {stock}',
+  toggleDigitalProductMainScreenShow: '📺 Show on the main screen',
+  toggleDigitalProductMainScreenHide: '🙈 Hide from the main screen',
+  digitalProductMainScreenShown: '✅ Product is now visible on the main screen.',
+  digitalProductMainScreenHidden: '✅ Product was hidden from the main screen.',
+  digitalProductMainScreenActive: 'Visible on the main screen',
+  digitalProductMainScreenHiddenStatus: 'Hidden from the main screen',
+  mainScreenProductsHeader: '🛍️ Available subscriptions:',
+  setReferralGiftAmount: '💵 Control referral gift amount',
+  enterReferralGiftAmount: 'Send the referral gift amount in USD (example: 0.10 or 1):',
+  currentReferralGiftAmount: 'Current referral gift: {amount} USD per successful invite',
+  referralGiftUpdated: '✅ Referral gift amount updated.',
+  referralGiftEarned: '🎁 You received {amount} USD as an invite gift. New balance: {balance} USD'
 });
 
 Object.assign(DEFAULT_TEXTS.ar, {
@@ -1112,6 +1125,19 @@ Object.assign(DEFAULT_TEXTS.ar, {
   editDigitalProductName: '✏️ تعديل اسم المنتج',
   editDigitalProductPrice: '💰 تعديل سعر المنتج',
   editDigitalProductDescription: '📝 تعديل وصف المنتج',
+  toggleDigitalProductMainScreenShow: '📺 إظهار على الشاشة الرئيسية',
+  toggleDigitalProductMainScreenHide: '🙈 إخفاء من الشاشة الرئيسية',
+  digitalProductMainScreenShown: '✅ تم إظهار المنتج على الشاشة الرئيسية.',
+  digitalProductMainScreenHidden: '✅ تم إخفاء المنتج من الشاشة الرئيسية.',
+  digitalProductMainScreenActive: 'ظاهر على الشاشة الرئيسية',
+  digitalProductMainScreenHiddenStatus: 'مخفي من الشاشة الرئيسية',
+  mainScreenProductsHeader: '🛍️ الاشتراكات المتوفرة:',
+  referralGiftSettings: '🎁 سنتات هدايا الدعوة',
+  setReferralGiftAmount: '💵 التحكم في سنتات هدايا الدعوة',
+  enterReferralGiftAmount: 'أرسل قيمة هدية الدعوة بالدولار (مثال: 0.10 أو 1):',
+  currentReferralGiftAmount: 'هدية الدعوة الحالية: {amount} دولار لكل دعوة ناجحة',
+  referralGiftUpdated: '✅ تم تحديث قيمة هدية الدعوة.',
+  referralGiftEarned: '🎁 حصلت على {amount} دولار كهدية دعوة. رصيدك الجديد: {balance} دولار',
   deleteDigitalProduct: '🗑️ حذف المنتج',
   viewDigitalProductStock: '📄 عرض المنتج المضاف',
   searchDigitalProductDuplicates: '🔎 البحث عن المكرر',
@@ -1141,7 +1167,7 @@ Object.assign(DEFAULT_TEXTS.ar, {
   productDescriptionLine: 'الوصف: {description}',
   invalidBulkStockPairs: '❌ يجب إرسال مخزون الحسابات على شكل أزواج: الإيميل في سطر والباسورد في السطر الذي يليه.',
   emptyStockInput: '❌ أرسل المخزون/الحسابات أولاً.',
-  digitalProductManageText: '🧾 {name}\nالسعر: {price} دولار\nالمخزون المتبقي: {stock}\nالنوع: {type}\nتاريخ الإضافة: {createdAt}\nالوصف: {description}',
+  digitalProductManageText: '🧾 {name}\nالسعر: {price} دولار\nالمخزون المتبقي: {stock}\nالنوع: {type}\nتاريخ الإضافة: {createdAt}\nالشاشة الرئيسية: {mainScreenStatus}\nالوصف: {description}',
   buyNow: '🛒 شراء الآن',
   digitalStockBroadcastToggleOn: '📣 إشعار المخزون: ✅ مفعل',
   digitalStockBroadcastToggleOff: '📣 إشعار المخزون: ❌ متوقف',
@@ -1191,7 +1217,8 @@ Object.assign(DEFAULT_TEXTS.ar, {
   supportUserMessageForwarded: '📨 تم إيصال رسالتك إلى الدعم.',
   supportThreadAdminNotice: '📩 رسالة دعم مباشرة\n\nالمعرف: {username}\nالاسم: {name}\nايدي المستخدم: {userId}\n\nالرسالة: {message}',
   digitalStockInputPrompt: 'أرسل الآن المخزون/الحسابات.\n\nالصيغ السريعة المدعومة:\nemail|password\nemail | password\nemail|password|verification\nemail|password|verification|ملاحظة إضافية\n\nويمكنك أيضاً استخدام زر «إضافة إيميل وباسورد» لإضافة حساب واحد خطوة بخطوة.',
-  digitalProductListButton: '{name} - {price} دولار | يوجد {stock}'
+  digitalProductListButton: '{name} - {price} دولار | يوجد {stock}',
+  mainScreenDigitalProductButton: '{name} - {price} دولار | يوجد {stock}'
 });
 
 Object.assign(DEFAULT_TEXTS.en, {
@@ -1580,6 +1607,13 @@ async function getReferralRedeemPoints() {
   const rawValue = await getGlobalSetting('referral_redeem_points', '10');
   const value = parseInt(rawValue, 10);
   return Number.isInteger(value) && value > 0 ? value : 10;
+}
+
+async function getReferralGiftAmount() {
+  const rawValue = await getGlobalSetting('referral_gift_amount', '0.10');
+  const value = parseFloat(rawValue);
+  if (!Number.isFinite(value) || value < 0) return 0.10;
+  return Math.round(value * 100) / 100;
 }
 
 async function getFreeCodeCooldownDays() {
@@ -2201,6 +2235,39 @@ function parseDigitalSectionIdFromCategory(category) {
   return match ? parseInt(match[1], 10) : null;
 }
 
+function getMerchantDescriptionMeta(merchant) {
+  return merchant && merchant.description && typeof merchant.description === 'object' ? { ...merchant.description } : {};
+}
+
+function isDigitalProductShownOnMainScreen(merchant) {
+  const meta = getMerchantDescriptionMeta(merchant);
+  return meta.showOnMainScreen === true;
+}
+
+async function setDigitalProductMainScreenVisibility(merchantId, visible) {
+  const merchant = await Merchant.findByPk(merchantId);
+  if (!merchant) return false;
+  const meta = getMerchantDescriptionMeta(merchant);
+  meta.showOnMainScreen = Boolean(visible);
+  merchant.description = meta;
+  await merchant.save();
+  return true;
+}
+
+async function getMainScreenDigitalProducts() {
+  const sections = await getDigitalSections();
+  const result = [];
+  for (const section of sections) {
+    const products = await getDigitalProductsForSection(section.id);
+    for (const product of products) {
+      if (isDigitalProductShownOnMainScreen(product)) {
+        result.push(product);
+      }
+    }
+  }
+  return result;
+}
+
 function isDigitalSectionCategory(category) {
   return Number.isInteger(parseDigitalSectionIdFromCategory(category));
 }
@@ -2669,6 +2736,7 @@ async function showDigitalProductAdmin(userId, merchantId) {
     ? await getText(userId, 'typeBulk')
     : await getText(userId, 'typeSingle');
   const description = await getMerchantAdminDescriptionSummary(userId, merchant);
+  const mainScreenStatus = await getText(userId, isDigitalProductShownOnMainScreen(merchant) ? 'digitalProductMainScreenActive' : 'digitalProductMainScreenHiddenStatus');
 
   await bot.sendMessage(
     userId,
@@ -2678,7 +2746,8 @@ async function showDigitalProductAdmin(userId, merchantId) {
       stock,
       type: typeText,
       createdAt: formatAdminDateTime(merchant.createdAt),
-      description
+      description,
+      mainScreenStatus
     }),
     {
       reply_markup: {
@@ -2691,6 +2760,7 @@ async function showDigitalProductAdmin(userId, merchantId) {
           [{ text: await getText(userId, 'editDigitalProductName'), callback_data: `admin_edit_digital_product_name_${merchant.id}` }],
           [{ text: await getText(userId, 'editDigitalProductPrice'), callback_data: `admin_edit_digital_product_price_${merchant.id}` }],
           [{ text: await getText(userId, 'editDigitalProductDescription'), callback_data: `admin_edit_digital_product_description_${merchant.id}` }],
+          [{ text: await getText(userId, isDigitalProductShownOnMainScreen(merchant) ? 'toggleDigitalProductMainScreenHide' : 'toggleDigitalProductMainScreenShow'), callback_data: `admin_toggle_digital_product_main_${merchant.id}` }],
           [{ text: await getText(userId, 'deleteDigitalProduct'), callback_data: `admin_delete_digital_product_${merchant.id}` }],
           [{ text: await getText(userId, 'back'), callback_data: sectionId ? `admin_digital_section_${sectionId}` : 'admin_digital_subscriptions' }]
         ]
@@ -4724,6 +4794,21 @@ async function awardReferralPoints(referredUserId) {
       transaction: t
     });
 
+    const referralGiftAmount = await getReferralGiftAmount();
+    if (referralGiftAmount > 0) {
+      await User.increment(
+        { balance: referralGiftAmount },
+        { where: { id: referrer.id }, transaction: t }
+      );
+      await BalanceTransaction.create({
+        userId: referrer.id,
+        amount: referralGiftAmount,
+        type: 'referral_gift',
+        status: 'completed',
+        caption: `Referral gift for invited user ${referredUserId}`
+      }, { transaction: t });
+    }
+
     const milestoneBonus = await getReferralMilestoneBonus(rewardedReferralCount);
     if (milestoneBonus > 0) {
       await User.increment(
@@ -4743,6 +4828,14 @@ async function awardReferralPoints(referredUserId) {
     await bot.sendMessage(referrer.id, await getText(referrer.id, 'referralEarned', {
       points: updatedPoints
     }));
+
+    const updatedBalance = Number(updatedReferrer?.balance || 0);
+    if (referralGiftAmount > 0) {
+      await bot.sendMessage(referrer.id, await getText(referrer.id, 'referralGiftEarned', {
+        amount: formatUsdPrice(referralGiftAmount),
+        balance: formatUsdPrice(updatedBalance)
+      }));
+    }
 
     if (milestoneBonus > 0) {
       await bot.sendMessage(referrer.id, await getText(referrer.id, 'referralMilestoneBonus', {
@@ -7426,6 +7519,7 @@ async function sendMainMenu(userId) {
   const currentBalanceLine = await getCurrentBalanceLineText(userId);
   const digitalSections = await getDigitalSections();
   const digitalSectionMap = new Map(digitalSections.map(section => [getDigitalSectionCategory(section.id), section]));
+  const mainScreenProducts = await getMainScreenDigitalProducts();
 
   const buttonLabels = {
     buy: await getText(userId, 'buy'),
@@ -7445,18 +7539,23 @@ async function sendMainMenu(userId) {
   };
 
   const buttons = [];
-  let addedDigitalSectionsGroupButton = false;
+
+  for (const product of mainScreenProducts) {
+    const stock = await getMerchantAvailableStock(product.id);
+    const name = await getMerchantDisplayName(product, userId);
+    buttons.push([{
+      text: await getText(userId, 'mainScreenDigitalProductButton', { name, price: formatUsdPrice(product.price), stock }),
+      callback_data: `digital_product_${product.id}`
+    }]);
+  }
 
   for (const id of order) {
     const digitalSection = digitalSectionMap.get(id);
     if (digitalSection) {
-      if (!addedDigitalSectionsGroupButton && visibility.digital_sections_group !== false && digitalSections.length > 0) {
-        buttons.push([{
-          text: buttonLabels.digital_sections_group,
-          callback_data: 'digital_sections_group'
-        }]);
-        addedDigitalSectionsGroupButton = true;
-      }
+      buttons.push([{
+        text: `🧩 ${await getDigitalSectionDisplayName(digitalSection, userId)}`,
+        callback_data: `digital_section_${digitalSection.id}`
+      }]);
       continue;
     }
 
@@ -7469,9 +7568,9 @@ async function sendMainMenu(userId) {
     }
   }
 
-  await bot.sendMessage(userId, `${await getText(userId, 'menu')}
+  const mainHeader = mainScreenProducts.length ? `\n\n${await getText(userId, 'mainScreenProductsHeader')}` : '';
 
-${currentBalanceLine}`, {
+  await bot.sendMessage(userId, `${await getText(userId, 'menu')}${mainHeader}\n\n${currentBalanceLine}`, {
     reply_markup: { inline_keyboard: buttons }
   });
 }
@@ -7516,10 +7615,12 @@ async function showReferralSettingsAdmin(userId) {
   const freeCodeDays = await getFreeCodeCooldownDays();
   const milestonesText = await getReferralMilestonesText();
   const referralsEnabled = await getReferralEnabled();
+  const referralGiftAmount = await getReferralGiftAmount();
   const percentLine = await getText(userId, 'currentReferralPercent', { percent });
   const pointsLine = await getText(userId, 'currentRedeemPoints', { points: redeemPoints });
   const freeCodeDaysLine = await getText(userId, 'currentFreeCodeDays', { days: freeCodeDays });
   const milestonesLine = await getText(userId, 'currentReferralMilestones', { milestones: milestonesText });
+  const referralGiftLine = await getText(userId, 'currentReferralGiftAmount', { amount: formatUsdPrice(referralGiftAmount) });
   const referralsStatusLine = await getText(userId, referralsEnabled ? 'referralsEnabledStatus' : 'referralsDisabledStatus');
 
   const keyboard = {
@@ -7527,6 +7628,7 @@ async function showReferralSettingsAdmin(userId) {
       [{ text: await getText(userId, 'setReferralPercent'), callback_data: 'admin_set_referral_percent' }],
       [{ text: await getText(userId, 'setRedeemPoints'), callback_data: 'admin_set_redeem_points' }],
       [{ text: await getText(userId, 'setFreeCodeDays'), callback_data: 'admin_set_free_code_days' }],
+      [{ text: await getText(userId, 'setReferralGiftAmount'), callback_data: 'admin_set_referral_gift_amount' }],
       [{ text: await getText(userId, 'editReferralMilestones'), callback_data: 'admin_edit_referral_milestones' }],
       [{ text: await getText(userId, 'referralEligibleUsers'), callback_data: 'admin_referral_eligible_users' }],
       [{ text: await getText(userId, 'grantPoints'), callback_data: 'admin_grant_points' }],
@@ -7541,7 +7643,7 @@ async function showReferralSettingsAdmin(userId) {
 
   await bot.sendMessage(
     userId,
-    await getText(userId, 'manageReferralSettingsText', { percentLine, pointsLine, freeCodeDaysLine, milestonesLine, referralsStatusLine }),
+    await getText(userId, 'manageReferralSettingsText', { percentLine, pointsLine, freeCodeDaysLine, milestonesLine: `${milestonesLine}\n${referralGiftLine}`, referralsStatusLine }),
     { reply_markup: keyboard }
   );
 }
@@ -8714,7 +8816,8 @@ bot.on('callback_query', async query => {
       const requiredPoints = await getEffectiveRedeemPointsForUser(userId);
       const redeemableCodes = await getRedeemableReferralCodesCount(userId);
       const fallbackLink = (await User.findByPk(userId))?.lang === 'ar' ? 'رابط الإحالة غير متاح حالياً' : 'Referral link is currently unavailable';
-      const info = await getText(userId, 'referralInfo', { link: escapeHtml(link || fallbackLink), points, requiredPoints, redeemableCodes });
+      const giftAmount = await getReferralGiftAmount();
+      const info = await getText(userId, 'referralInfo', { link: escapeHtml(link || fallbackLink), points, requiredPoints, redeemableCodes, giftAmount: formatUsdPrice(giftAmount) });
 
       const freeCodeButtonRow = await shouldShowFreeCodeButton(userId)
         ? [[{ text: await getText(userId, 'getFreeCode'), callback_data: 'get_free_code' }]]
@@ -9438,6 +9541,13 @@ bot.on('callback_query', async query => {
       return;
     }
 
+    if (data === 'admin_set_referral_gift_amount' && isAdmin(userId)) {
+      await setUserState(userId, { action: 'set_referral_gift_amount' });
+      await bot.sendMessage(userId, await getText(userId, 'enterReferralGiftAmount'));
+      await bot.answerCallbackQuery(query.id);
+      return;
+    }
+
     if (data === 'admin_set_redeem_points' && isAdmin(userId)) {
       await setUserState(userId, { action: 'set_redeem_points' });
       await bot.sendMessage(userId, await getText(userId, 'enterRedeemPoints'));
@@ -9944,6 +10054,19 @@ bot.on('callback_query', async query => {
       await bot.sendMessage(userId, await getText(userId, 'askEditDigitalProductPrice'));
       await bot.answerCallbackQuery(query.id);
       return;
+    }
+
+    const toggleDigitalProductMainMatch = data.match(/^admin_toggle_digital_product_main_(\d+)$/);
+    if (toggleDigitalProductMainMatch && isAdmin(userId)) {
+      const merchantId = parseInt(toggleDigitalProductMainMatch[1], 10);
+      const merchant = await Merchant.findByPk(merchantId);
+      if (merchant) {
+        const nextVisible = !isDigitalProductShownOnMainScreen(merchant);
+        await setDigitalProductMainScreenVisibility(merchantId, nextVisible);
+        await bot.answerCallbackQuery(query.id, { text: await getText(userId, nextVisible ? 'digitalProductMainScreenShown' : 'digitalProductMainScreenHidden') });
+        await showDigitalProductAdmin(userId, merchantId);
+        return;
+      }
     }
 
     const editDigitalProductDescriptionMatch = data.match(/^admin_edit_digital_product_description_(\d+)$/);
