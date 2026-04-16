@@ -28,12 +28,11 @@ const BINANCE_PAY_RETURN_URL = String(process.env.BINANCE_PAY_RETURN_URL || '').
 const BINANCE_PAY_CANCEL_URL = String(process.env.BINANCE_PAY_CANCEL_URL || '').trim();
 const BINANCE_PAY_ORDER_EXPIRE_MS = Math.max(5 * 60 * 1000, parseInt(process.env.BINANCE_PAY_ORDER_EXPIRE_MS || String(30 * 60 * 1000), 10) || (30 * 60 * 1000));
 const BINANCE_PAY_PENDING_POLL_INTERVAL_MS = Math.max(30 * 1000, parseInt(process.env.BINANCE_PAY_PENDING_POLL_INTERVAL_MS || String(2 * 60 * 1000), 10) || (2 * 60 * 1000));
+const BINANCE_TRANSFER_PENDING_POLL_INTERVAL_MS = Math.max(3 * 1000, parseInt(process.env.BINANCE_TRANSFER_PENDING_POLL_INTERVAL_MS || '5000', 10) || 5000);
+const BINANCE_TRANSFER_IMMEDIATE_CHECK_DELAYS_MS = String(process.env.BINANCE_TRANSFER_IMMEDIATE_CHECK_DELAYS_MS || '5000,12000,20000').split(',').map(v => parseInt(String(v || '').trim(), 10)).filter(v => Number.isFinite(v) && v >= 1000 && v <= (30 * 60 * 1000));
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || process.env.OPENAI_KEY || '';
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 const OPENAI_BASE_URL = String(process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '');
-const APP_TIMEZONE = String(process.env.APP_TIMEZONE || 'Asia/Baghdad');
-const DEFAULT_SUPPORT_TELEGRAM_URL = String(process.env.DEFAULT_SUPPORT_TELEGRAM_URL || 'https://t.me/xawasx').trim();
-const DEFAULT_SUPPORT_WHATSAPP_URL = String(process.env.DEFAULT_SUPPORT_WHATSAPP_URL || 'https://wa.me/9647882891545').trim();
 
 if (!TOKEN || Number.isNaN(ADMIN_ID) || !DATABASE_URL) {
   console.error('❌ Missing required environment variables');
@@ -250,28 +249,6 @@ const Captcha = sequelize.define('Captcha', {
   expiresAt: { type: DataTypes.DATE, allowNull: false }
 });
 
-const ActivationRequest = sequelize.define('ActivationRequest', {
-  id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
-  userId: { type: DataTypes.BIGINT, allowNull: false },
-  merchantId: { type: DataTypes.INTEGER, allowNull: false, references: { model: Merchant, key: 'id' } },
-  email: { type: DataTypes.STRING, allowNull: false },
-  status: { type: DataTypes.STRING, allowNull: false, defaultValue: 'pending' },
-  adminMessageId: { type: DataTypes.BIGINT, allowNull: true },
-  chargedAmount: { type: DataTypes.DECIMAL(10, 2), allowNull: false, defaultValue: 0 },
-  decidedAt: { type: DataTypes.DATE, allowNull: true },
-  activatedAt: { type: DataTypes.DATE, allowNull: true },
-  delayHours: { type: DataTypes.INTEGER, allowNull: true },
-  delayedUntil: { type: DataTypes.DATE, allowNull: true },
-  delayReason: { type: DataTypes.TEXT, allowNull: true },
-  notes: { type: DataTypes.TEXT, allowNull: true }
-}, {
-  indexes: [
-    { fields: ['userId'] },
-    { fields: ['merchantId'] },
-    { fields: ['status'] }
-  ]
-});
-
 const PrivateChannelCodePostCache = sequelize.define('PrivateChannelCodePostCache', {
   id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
   channelChatId: { type: DataTypes.STRING, allowNull: false },
@@ -297,10 +274,6 @@ BotStat.belongsTo(BotService);
 User.hasMany(ReferralReward, { as: 'Referrer', foreignKey: 'referrerId' });
 User.hasMany(ReferralReward, { as: 'Referred', foreignKey: 'referredId' });
 DiscountCode.belongsTo(User, { as: 'creator', foreignKey: 'createdBy' });
-User.hasMany(ActivationRequest, { foreignKey: 'userId' });
-ActivationRequest.belongsTo(User, { foreignKey: 'userId' });
-Merchant.hasMany(ActivationRequest, { foreignKey: 'merchantId' });
-ActivationRequest.belongsTo(Merchant, { foreignKey: 'merchantId' });
 
 const DEFAULT_TEXTS = {
   en: {
@@ -363,7 +336,7 @@ const DEFAULT_TEXTS = {
     botAdded: '✅ Bot added!',
     botRemoved: '❌ Bot removed!',
     chooseCurrency: '💱 Choose currency for deposit:',
-    currency_usd_name: 'Dollar',
+    currency_usd_name: 'Binance',
     currency_iqd_name: 'Iraqi Dinar',
     depositInstructionsUSD: '💰 Send {amount} USDT to one of the following payment methods:\n\n{methods_block}\n\nThen send a screenshot of the payment with any message.\n\n{instructions}',
     depositInstructionsIQD: '💰 Send {amountIQD} Iraqi Dinar (≈ {amountUSD} USD at rate {rate} IQD/USD) to one of the following payment methods:\n\n{methods_block}\n\nThen send a screenshot of the payment with any message.\n\n{instructions}',
@@ -585,11 +558,6 @@ const DEFAULT_TEXTS = {
     channelLinkSet: '✅ Channel link updated!',
     channelMessageSet: '✅ Channel message updated!',
     buttonVisibilityUpdated: '✅ Button visibility updated!',
-    featureRemoved: '⛔ This section has been removed from this version to keep the bot organized.',
-    chooseDepositMethodType: 'Choose the deposit method:',
-    enterDepositAmountForCurrency: 'Send the top-up amount in USD for {currency}:',
-    deleteDepositMethodConfirm: '⚠️ Are you sure you want to delete this payment method?',
-    deleteDepositMethodDone: '✅ Payment method deleted.',
     setIQDRate: '💰 Set IQD Exchange Rate',
     setUSDTWallet: '🏦 Set USDT Wallet Address',
     setIQDWallet: '🏦 Set IQD SuperKey',
@@ -604,7 +572,7 @@ const DEFAULT_TEXTS = {
     enterInstructions: 'Send deposit instructions (text):',
     enterNewCurrencyName: 'Send new currency name:',
     manageIQDMethods: 'Manage Iraqi Dinar Methods',
-    manageUSDMethods: 'Manage dollar payment methods',
+    manageUSDMethods: 'Manage Binance Methods',
     addDepositMethod: 'Add Payment Method',
     deleteDepositMethod: 'Delete Payment Method',
     editDepositTemplates: 'Edit Deposit Messages',
@@ -651,36 +619,6 @@ const DEFAULT_TEXTS = {
     askDigitalProductPrice: 'Send the item price in USD:',
     askDigitalProductDescription: 'Send the item details (text, photo, video, or /skip):',
     digitalProductCreated: '✅ The digital item was created successfully! ID: {id}',
-    toggleSectionMainMenuShow: '👁 Show on: Main Menu',
-    toggleSectionMainMenuHide: '🙈 Hide from: Main Menu',
-    sectionMovedUp: '✅ Section moved up.',
-    sectionMovedDown: '✅ Section moved down.',
-    askSubscriptionEmail: '📧 Send the account email for this subscription now:',
-    invalidEmail: '❌ Invalid email. Please send a valid email address.',
-    activationRequestSent: '✅ Your subscription request was received.\n\nService: {service}\nEmail: {email}\nAmount: {amount} USD\nTime: {time}\n\nPlease wait for admin activation.',
-    activationRequestAdminTitle: '📥 New subscription activation request',
-    activationRequestAdminBody: 'Service: {service}\nUser: {name}\nUsername: {username}\nUser ID: {userId}\nEmail: {email}\nAmount: {amount} USD\nTime: {time}',
-    activationApprove: '✅ Activated',
-    activationReject: '❌ Not activated',
-    activationDoneUser: '✅ Your subscription has been activated successfully.\n\nService: {service}\nEmail: {email}',
-    activationRejectedUser: '❌ Your subscription is still not activated.\n\nService: {service}\nEmail: {email}\n\nIf you want, contact support مباشرة from the buttons below.',
-    contactSupportNow: '📞 Contact support now',
-    openTelegram: '💬 Telegram',
-    openWhatsApp: '🟢 WhatsApp',
-    openExtraContact: '{label}',
-    supportSettingsTitle: '📞 Support settings for: {name}',
-    currentSupportTelegram: 'Telegram: {value}',
-    currentSupportWhatsapp: 'WhatsApp: {value}',
-    currentSupportExtra: 'Extra contact: {value}',
-    setProductTelegramSupport: '💬 Set Telegram support',
-    setProductWhatsappSupport: '🟢 Set WhatsApp support',
-    setProductExtraSupport: '➕ Set extra contact',
-    clearProductExtraSupport: '🗑 Clear extra contact',
-    askProductTelegramSupport: 'Send the Telegram link or username (example: https://t.me/example or @example).',
-    askProductWhatsappSupport: 'Send the WhatsApp number or link.',
-    askProductExtraSupport: 'Send the extra contact in this format: Label | URL',
-    supportSettingsUpdated: '✅ Support settings updated.',
-    supportSettingsCleared: '✅ Extra contact removed.',
     digitalProductManageText: '🧾 {name}\nPrice: {price} USD\nRemaining stock: {stock}\nType: {type}',
     addDigitalProductStock: '📦 Add stock/accounts',
     digitalStockInputPrompt: 'Send the stock/accounts now.\n\nFor account items, send the email on one line and the password on the next line for each account.',
@@ -764,7 +702,7 @@ const DEFAULT_TEXTS = {
     botAdded: '✅ تمت إضافة البوت!',
     botRemoved: '❌ تم حذف البوت!',
     chooseCurrency: '💱 اختر العملة للشحن:',
-    currency_usd_name: 'دولار',
+    currency_usd_name: 'بايننس',
     currency_iqd_name: 'دينار عراقي',
     depositInstructionsUSD: '💰 قم بإرسال {amount} USDT إلى إحدى طرق الدفع التالية:\n\n{methods_block}\n\nثم أرسل صورة التحويل مع أي رسالة.\n\n{instructions}',
     depositInstructionsIQD: '💰 قم بإرسال {amountIQD} دينار عراقي (≈ {amountUSD} دولار بسعر صرف {rate} دينار/دولار) إلى إحدى طرق الدفع التالية:\n\n{methods_block}\n\nثم أرسل صورة التحويل مع أي رسالة.\n\n{instructions}',
@@ -986,11 +924,6 @@ const DEFAULT_TEXTS = {
     channelLinkSet: '✅ تم تحديث رابط القناة!',
     channelMessageSet: '✅ تم تحديث نص الرسالة!',
     buttonVisibilityUpdated: '✅ تم تحديث ظهور الأزرار!',
-    featureRemoved: '⛔ تم حذف هذا القسم من هذه النسخة للحفاظ على ترتيب البوت.',
-    chooseDepositMethodType: 'اختر طريقة الشحن:',
-    enterDepositAmountForCurrency: 'أرسل مبلغ الشحن بالدولار لطريقة {currency}:',
-    deleteDepositMethodConfirm: '⚠️ هل أنت متأكد من حذف طريقة الدفع هذه؟',
-    deleteDepositMethodDone: '✅ تم حذف طريقة الدفع.',
     setIQDRate: '💰 تعيين سعر صرف الدينار',
     setUSDTWallet: '🏦 تعيين عنوان محفظة USDT',
     setIQDWallet: '🏦 تعيين السوبر كي للدينار',
@@ -1032,36 +965,6 @@ const DEFAULT_TEXTS = {
     askDigitalProductPrice: 'أرسل سعر الاشتراك بالدولار:',
     askDigitalProductDescription: 'أرسل تفاصيل الاشتراك (نص، صورة، فيديو، أو /skip):',
     digitalProductCreated: '✅ تم إنشاء الاشتراك الرقمي بنجاح! المعرف: {id}',
-    toggleSectionMainMenuShow: '👁 عرض على: القائمة الرئيسية',
-    toggleSectionMainMenuHide: '🙈 إخفاء من: القائمة الرئيسية',
-    sectionMovedUp: '✅ تم رفع الخانة.',
-    sectionMovedDown: '✅ تم تنزيل الخانة.',
-    askSubscriptionEmail: '📧 أرسل الآن الإيميل الخاص بهذا الاشتراك:',
-    invalidEmail: '❌ الإيميل غير صالح. أرسل بريدًا إلكترونيًا صحيحًا.',
-    activationRequestSent: '✅ تم استلام طلب الاشتراك الخاص بك.\n\nالخدمة: {service}\nالإيميل: {email}\nالمبلغ: {amount} دولار\nالوقت: {time}\n\nيرجى انتظار التفعيل من الأدمن.',
-    activationRequestAdminTitle: '📥 طلب تفعيل اشتراك جديد',
-    activationRequestAdminBody: 'الخدمة: {service}\nالاسم: {name}\nالمعرف: {username}\nايدي المستخدم: {userId}\nالإيميل: {email}\nالمبلغ: {amount} دولار\nالوقت: {time}',
-    activationApprove: '✅ تم التفعيل',
-    activationReject: '❌ ليس مفعل',
-    activationDoneUser: '✅ تم تفعيل اشتراكك بنجاح.\n\nالخدمة: {service}\nالإيميل: {email}',
-    activationRejectedUser: '❌ اشتراكك ما زال غير مفعل.\n\nالخدمة: {service}\nالإيميل: {email}\n\nإذا تريد يمكنك التواصل مع الدعم مباشرة من الأزرار أدناه.',
-    contactSupportNow: '📞 تواصل مع الدعم الآن',
-    openTelegram: '💬 تيليجرام',
-    openWhatsApp: '🟢 واتساب',
-    openExtraContact: '{label}',
-    supportSettingsTitle: '📞 إعدادات التواصل للمنتج: {name}',
-    currentSupportTelegram: 'تيليجرام: {value}',
-    currentSupportWhatsapp: 'واتساب: {value}',
-    currentSupportExtra: 'تواصل إضافي: {value}',
-    setProductTelegramSupport: '💬 تعيين تيليجرام الدعم',
-    setProductWhatsappSupport: '🟢 تعيين واتساب الدعم',
-    setProductExtraSupport: '➕ تعيين تواصل إضافي',
-    clearProductExtraSupport: '🗑 حذف التواصل الإضافي',
-    askProductTelegramSupport: 'أرسل رابط أو معرف التيليجرام (مثال: https://t.me/example أو @example).',
-    askProductWhatsappSupport: 'أرسل رقم الواتساب أو رابطه.',
-    askProductExtraSupport: 'أرسل التواصل الإضافي بهذا الشكل: الاسم | الرابط',
-    supportSettingsUpdated: '✅ تم تحديث إعدادات التواصل.',
-    supportSettingsCleared: '✅ تم حذف التواصل الإضافي.',
     digitalProductManageText: '🧾 {name}\nالسعر: {price} دولار\nالمخزون المتبقي: {stock}\nالنوع: {type}',
     addDigitalProductStock: '📦 إضافة مخزون/حسابات',
     digitalStockInputPrompt: 'أرسل الآن المخزون/الحسابات.\n\nإذا كان المنتج حسابات، فأرسل الإيميل في سطر والباسورد في السطر الذي بعده لكل حساب.',
@@ -1288,146 +1191,6 @@ Object.assign(DEFAULT_TEXTS.ar, {
 });
 
 Object.assign(DEFAULT_TEXTS.en, {
-  moveDigitalProduct: '📦 Move subscription',
-  moveDigitalProductToMainMenu: '👁 Add to: Main Menu',
-  moveDigitalProductToSection: '📂 Move to section',
-  chooseDigitalProductTarget: 'Choose where this subscription should appear:',
-  digitalProductMovedToMainMenu: '✅ Subscription moved to the main menu.',
-  digitalProductMovedToSection: '✅ Subscription moved to the selected section.',
-  digitalProductPlacementLine: 'Display location: {location}',
-  digitalPlacementMainMenu: 'Main menu',
-  digitalPlacementSection: 'Section: {name}',
-  mainMenuProductsHeader: '🧩 Products shown directly in the main menu',
-  noMainMenuProducts: 'No subscriptions are currently shown directly in the main menu.'
-});
-
-Object.assign(DEFAULT_TEXTS.ar, {
-  moveDigitalProduct: '📦 نقل الاشتراك',
-  moveDigitalProductToMainMenu: '👁 إضافة إلى: القائمة الرئيسية',
-  moveDigitalProductToSection: '📂 نقل إلى خانة',
-  chooseDigitalProductTarget: 'اختر مكان ظهور هذا الاشتراك:',
-  digitalProductMovedToMainMenu: '✅ تم نقل الاشتراك إلى القائمة الرئيسية.',
-  digitalProductMovedToSection: '✅ تم نقل الاشتراك إلى الخانة المحددة.',
-  digitalProductPlacementLine: 'مكان الظهور: {location}',
-  digitalPlacementMainMenu: 'القائمة الرئيسية',
-  digitalPlacementSection: 'الخانة: {name}',
-  mainMenuProductsHeader: '🧩 اشتراكات ظاهرة مباشرة في القائمة الرئيسية',
-  noMainMenuProducts: 'لا توجد اشتراكات ظاهرة مباشرة في القائمة الرئيسية حالياً.'
-});
-
-Object.assign(DEFAULT_TEXTS.en, {
-  inviteModeOn: '🎟 Invitation mode: ON',
-  inviteModeOff: '📦 Stock mode: ON',
-  switchToInviteMode: '🔄 Convert from stock to invitation',
-  switchToStockMode: '🔄 Convert from invitation to stock',
-  inviteGuideSettings: '📝 Invitation guide / video / photo',
-  inviteGuideCurrent: 'Current guide: {type}',
-  inviteGuideEmpty: 'No invitation guide was added yet.',
-  inviteGuideTextType: 'Text',
-  inviteGuidePhotoType: 'Photo',
-  inviteGuideVideoType: 'Video',
-  askInviteGuideContent: 'Send the invitation guide now as text, photo, or video. Send /empty to clear it.',
-  inviteGuideUpdated: '✅ Invitation guide updated.',
-  inviteGuideCleared: '✅ Invitation guide removed.',
-  activationProcessingSoon: '✅ Your order has been received.\n\nService: {service}\nEmail: {email}\nAmount: {amount} USD\nTime: {time}\n\nYour request will be activated soon and pinned for admin follow-up.',
-  activationSentGuideUser: '📩 The invitation has been sent. Please check your email and follow the steps below:',
-  activationDelay: '⏳ Delay',
-  activationDelayChoose: 'Choose the delay duration:',
-  activationDelay1: '1 hour',
-  activationDelay2: '2 hours',
-  activationDelay3: '3 hours',
-  activationDelay4: '4 hours',
-  activationDelayedUser: '⏳ Activation was delayed for {hours} hour(s) because there is a temporary system issue.\n\nDo you agree to wait?',
-  activationDelayAccepted: '✅ Thank you. Please wait for the selected time and the admin will complete the activation.',
-  activationDelayDeclined: '❌ You chose not to wait. You can contact support directly from the buttons below.',
-  activationAcceptDelay: '✅ Agree',
-  activationDeclineDelay: '❌ Refuse',
-  activationDelayAppliedAdmin: 'Delay offer sent to the customer.',
-  activationDelayUserAcceptedAdmin: '✅ Customer accepted the delay.',
-  activationDelayUserDeclinedAdmin: '❌ Customer refused the delay.',
-  activationRequestAdminBodyHtml: 'Service: <b>{service}</b>\nUser: {name}\nUsername: {username}\nUser ID: <code>{userId}</code>\nEmail: <code>{email}</code>\nAmount: <b>{amount} USD</b>\nTime: <b>{time}</b>',
-  activationSendInviteDone: '✅ Invitation sent',
-  activationRejectShort: '❌ Reject',
-  activationDelayShort: '⏳ Delay',
-  inviteSupportTitle: 'Support buttons for this invite product',
-  onDemandStock: 'On demand'
-});
-
-Object.assign(DEFAULT_TEXTS.ar, {
-  inviteModeOn: '🎟 وضع الدعوة: مفعل',
-  inviteModeOff: '📦 وضع المخزون: مفعل',
-  switchToInviteMode: '🔄 تحويله من مخزون إلى دعوة',
-  switchToStockMode: '🔄 تحويله من دعوة إلى مخزون',
-  inviteGuideSettings: '📝 كتابة شرح / فيديو / نص / صورة',
-  inviteGuideCurrent: 'الشرح الحالي: {type}',
-  inviteGuideEmpty: 'لا يوجد شرح مضاف لهذه الدعوة حتى الآن.',
-  inviteGuideTextType: 'نص',
-  inviteGuidePhotoType: 'صورة',
-  inviteGuideVideoType: 'فيديو',
-  askInviteGuideContent: 'أرسل الآن شرح الدعوة كنص أو صورة أو فيديو. أرسل /empty للحذف.',
-  inviteGuideUpdated: '✅ تم تحديث شرح الدعوة.',
-  inviteGuideCleared: '✅ تم حذف شرح الدعوة.',
-  activationProcessingSoon: '✅ تم استلام طلبك.\n\nالخدمة: {service}\nالإيميل: {email}\nالمبلغ: {amount} دولار\nالوقت: {time}\n\nسيتم التفعيل قريباً ويتم تثبيت الطلب لمتابعته من الأدمن.',
-  activationSentGuideUser: '📩 تم إرسال الدعوة. يرجى الدخول إلى البريد الإلكتروني واتباع الخطوات التالية:',
-  activationDelay: '⏳ تأجيل',
-  activationDelayChoose: 'اختر مدة التأجيل:',
-  activationDelay1: '1 ساعة',
-  activationDelay2: '2 ساعة',
-  activationDelay3: '3 ساعة',
-  activationDelay4: '4 ساعة',
-  activationDelayedUser: '⏳ تم تأجيل التفعيل لمدة {hours} ساعة بسبب وجود مشكلة مؤقتة في النظام.\n\nهل توافق على الانتظار؟',
-  activationDelayAccepted: '✅ شكرًا لك. يرجى الانتظار حسب الوقت المحدد وسيكمل الأدمن التفعيل.',
-  activationDelayDeclined: '❌ تم رفض الانتظار. يمكنك التواصل مباشرة مع الدعم من الأزرار أدناه.',
-  activationAcceptDelay: '✅ موافقة',
-  activationDeclineDelay: '❌ رفض',
-  activationDelayAppliedAdmin: 'تم إرسال عرض التأجيل إلى الزبون.',
-  activationDelayUserAcceptedAdmin: '✅ وافق الزبون على التأجيل.',
-  activationDelayUserDeclinedAdmin: '❌ رفض الزبون التأجيل.',
-  activationRequestAdminBodyHtml: 'الخدمة: <b>{service}</b>\nالاسم: {name}\nالمعرف: {username}\nايدي المستخدم: <code>{userId}</code>\nالإيميل: <code>{email}</code>\nالمبلغ: <b>{amount} دولار</b>\nالوقت: <b>{time}</b>',
-  activationSendInviteDone: '✅ تم إرسال الدعوة',
-  activationRejectShort: '❌ رفض',
-  activationDelayShort: '⏳ تأجيل',
-  inviteSupportTitle: 'أزرار التواصل الخاصة بهذا المنتج الدعوي',
-  onDemandStock: 'حسب الطلب'
-});
-
-Object.assign(DEFAULT_TEXTS.en, {
-  chooseDepositMethodType: '⚡ Choose the payment method for deposit:',
-  chooseDepositAmountForMethod: '⚡ Choose the deposit amount via {method}:',
-  depositMethodInstructionsUSD: '⚡ <b>Deposit via {method}</b>\n\n💵 Amount: <b>{amountUSD}$</b>\n📌 Payment details:\n<code>{details}</code>\n🕒 Order time: <b>{time}</b>\n\nAfter paying, press the Done button below.',
-  depositMethodInstructionsIQD: '⚡ <b>Deposit via {method}</b>\n\n💵 Amount: <b>{amountUSD}$</b>\n🇮🇶 Amount to send: <b>{amountIQD}</b> IQD\n💱 Rate: <b>{rate}</b> IQD per 1 USD\n📌 Payment details:\n<code>{details}</code>\n🕒 Order time: <b>{time}</b>\n\nAfter paying, press the Done button below.',
-  donePayment: '✅ Done',
-  depositSendProofNow: '📸 Send the payment proof now for {method}. You can send a screenshot, photo, video, or a written note.',
-  depositProofRequired: '❌ Please send the payment proof now.',
-  depositTapDoneFirst: '✅ After you pay, press the Done button first, then send the proof.',
-  binanceRemoved: '⛔ Binance payment has been removed from this version.',
-  enterMethodTypePrompt: 'Send the payment method type: manual',
-  enterMethodTypeInvalid: '❌ The method type must be manual.',
-  depositLimitsUpdated: '✅ Deposit limits updated. Minimum: {min}$ | Maximum: {max}$',
-  methodNotFound: '❌ Payment method not found.',
-  manageUSDMethods: 'Manage dollar payment methods',
-  paymentMethods: '💳 Payment Methods'
-});
-
-Object.assign(DEFAULT_TEXTS.ar, {
-  chooseDepositMethodType: '⚡ اختر طريقة الدفع للشحن:',
-  chooseDepositAmountForMethod: '⚡ اختر مبلغ الشحن عبر {method}:',
-  depositMethodInstructionsUSD: '⚡ <b>الشحن عبر {method}</b>\n\n💵 المبلغ: <b>{amountUSD}$</b>\n📌 معلومات الدفع:\n<code>{details}</code>\n🕒 وقت الطلب: <b>{time}</b>\n\nبعد الدفع اضغط زر تم بالأسفل.',
-  depositMethodInstructionsIQD: '⚡ <b>الشحن عبر {method}</b>\n\n💵 المبلغ: <b>{amountUSD}$</b>\n🇮🇶 المبلغ المطلوب إرساله: <b>{amountIQD}</b> دينار\n💱 سعر الصرف: <b>{rate}</b> دينار لكل 1 دولار\n📌 معلومات الدفع:\n<code>{details}</code>\n🕒 وقت الطلب: <b>{time}</b>\n\nبعد الدفع اضغط زر تم بالأسفل.',
-  donePayment: '✅ تم',
-  depositSendProofNow: '📸 أرسل إثبات الدفع الآن لطريقة {method}. يمكنك إرسال صورة أو فيديو أو ملاحظة مكتوبة.',
-  depositProofRequired: '❌ أرسل إثبات الدفع الآن.',
-  depositTapDoneFirst: '✅ بعد أن تدفع اضغط أولاً على زر تم ثم أرسل الإثبات.',
-  binanceRemoved: '⛔ تم حذف طريقة دفع بايننس من هذه النسخة.',
-  enterMethodTypePrompt: 'أرسل نوع طريقة الدفع: manual',
-  enterMethodTypeInvalid: '❌ نوع الطريقة يجب أن يكون manual فقط.',
-  depositLimitsUpdated: '✅ تم تحديث حدود الشحن. الحد الأدنى: {min}$ | الحد الأعلى: {max}$',
-  methodNotFound: '❌ طريقة الدفع غير موجودة.',
-  manageUSDMethods: 'إدارة طرق الدفع بالدولار',
-  paymentMethods: '💳 طرق الدفع'
-});
-
-Object.assign(DEFAULT_TEXTS.en, {
   aiAssistantPurchaseConfirm: '🛒 Purchase confirmation\n\nProduct: {name}\nQuantity: {qty}\nPrice per item: {price} USD\nTotal: {total} USD\nRemaining stock: {stock}\nYour balance: {balance} USD\n\nAre you sure you want me to complete this purchase now?',
   aiAssistantPurchaseNeedMore: 'Would you like to know more about {name} before purchasing?',
   aiAssistantPurchaseUnavailable: '❌ This item is currently unavailable in the requested quantity. Available stock: {stock}.',
@@ -1502,21 +1265,7 @@ Object.assign(DEFAULT_TEXTS.en, {
   binancePayWebhookInvalid: '❌ Binance Pay webhook is disabled in this build.',
   binancePayMismatch: '❌ Payment verified but amount or currency did not match the original order, so no balance was added.',
   binancePayApiTopupCreated: '✅ Binance Pay topup order created.',
-  binancePayApiStatusNotFound: 'Order not found.',
-  binanceTransferTitle: '⚡ Binance (Auto)',
-  binanceTransferNotConfigured: '⚠️ Binance transfer verification is not configured yet. Please set BINANCE_API_KEY, BINANCE_API_SECRET and BINANCE_PAY_ID.',
-  binanceTransferInstructions: '✅ <b>Order created.</b>\n\n💰 <b>Send:</b> <b>{amount} USDT</b>\n\n🆔 <b>To Binance ID</b>\n\n<code>{payId}</code>\n\n⚠️ <b>Important for payment confirmation:</b>\n\nYou must write this code:\n\n<code>{note}</code>\n\nin the payment note field (Note).',
-  binanceTransferCheckButton: '🧾 Verify via Order ID',
-  binanceTransferSendOrderIdHint: 'Send the Order ID here only.',
-  binanceTransferChecking: '⏳ Checking your payment in Binance, please wait a few seconds...',
-  binanceTransferVerified: '🎉 <b>Payment verified successfully!</b>\n✅ <b>{amount} USDT</b> has been added to your balance.\n\n💰 New balance: <b>{balance} USD</b>',
-  binanceTransferNotFound: '❌ No matching payment was found yet, or the amount does not match.\nIf you just paid, please wait one minute and try again.',
-  binanceTransferDuplicate: '❌ Sorry, this Order ID has already been used before.',
-  binanceTransferOrderIdExpired: '⌛ This Order ID has expired. Only transfers from the last hour can be verified.',
-  binanceTransferManualPrompt: 'Send the Order ID here:',
-  binanceTransferNoPending: '❌ You do not have a pending Binance deposit request. Start a new deposit first.',
-  binanceTransferHelp: 'ℹ️ Use the button below if you want to verify via Order ID.',
-  binanceTransferCheckByNotePending: '⏳ Payment not found yet. If you paid recently, wait a little and try again using the Order ID button.'
+  binancePayApiStatusNotFound: 'Order not found.'
 });
 
 Object.assign(DEFAULT_TEXTS.ar, {
@@ -1534,10 +1283,30 @@ Object.assign(DEFAULT_TEXTS.ar, {
   binancePayWebhookInvalid: '❌ Webhook الخاص بـ Binance Pay معطل في هذه النسخة.',
   binancePayMismatch: '❌ تم التحقق من الدفع لكن المبلغ أو العملة لا يطابقان الطلب الأصلي، لذلك لم تتم إضافة الرصيد.',
   binancePayApiTopupCreated: '✅ تم إنشاء طلب شحن Binance Pay.',
-  binancePayApiStatusNotFound: 'الطلب غير موجود.',
+  binancePayApiStatusNotFound: 'الطلب غير موجود.'
+});
+
+Object.assign(DEFAULT_TEXTS.en, {
+  binanceTransferTitle: '⚡ Binance (Auto)',
+  binanceTransferNotConfigured: '⚠️ Binance transfer verification is not configured yet. Please set BINANCE_API_KEY, BINANCE_API_SECRET and BINANCE_PAY_ID.',
+  binanceTransferInstructions: '✅ <b>Order created.</b>\n\n💰 <b>Send:</b> <b>{amount} USDT</b>\n\n🆔 <b>To Binance ID</b>\n\n<code>{payId}</code>\n\n⚠️ <b>Important for payment confirmation:</b>\n\nYou must write this code:\n\n<code>{note}</code>\n\nin the payment note field (Note).',
+  binanceTransferCheckButton: '🧾 Verify via Order ID',
+  binanceTransferSendOrderIdHint: 'Send the Order ID here only.',
+  binanceTransferChecking: '⏳ Checking your payment in Binance, please wait a few seconds...',
+  binanceTransferVerified: '🎉 <b>Payment verified successfully!</b>\n✅ <b>{amount} USDT</b> has been added to your balance.\n\n💰 New balance: <b>{balance} USD</b>',
+  binanceTransferNotFound: '❌ No matching payment was found yet, or the amount does not match.\nIf you just paid, please wait one minute and try again.',
+  binanceTransferDuplicate: '❌ Sorry, this Order ID has already been used before.',
+  binanceTransferOrderIdExpired: '⌛ This Order ID has expired. Only transfers from the last hour can be verified.',
+  binanceTransferManualPrompt: 'Send the Order ID here:',
+  binanceTransferNoPending: '❌ You do not have a pending Binance deposit request. Start a new deposit first.',
+  binanceTransferHelp: 'ℹ️ Use the button below if you want to verify via Order ID.',
+  binanceTransferCheckByNotePending: '⏳ Payment not found yet. If you paid recently, wait a little and try again using the Order ID button.'
+});
+
+Object.assign(DEFAULT_TEXTS.ar, {
   binanceTransferTitle: '⚡ Binance (Auto)',
   binanceTransferNotConfigured: '⚠️ التحقق من تحويلات بايننس غير مهيأ بعد. يرجى ضبط BINANCE_API_KEY و BINANCE_API_SECRET و BINANCE_PAY_ID.',
-  binanceTransferInstructions: '✅ تم إنشاء الطلب.\n\n💰 قم بأرسال : {amount} USDT\n\n🆔 إلى معرف بايننس\n\n<code>{payId}</code>\n\n⚠️ هام جدًا لتأكيد الدفع:\n\nيجب عليك كتابة هذا الكود:\n\n<code>{note}</code>\n\nفي خانة الملاحظات (Note) عند التحويل.',
+  binanceTransferInstructions: '✅ <b>تم إنشاء الطلب.</b>\n\n💰 <b>قم بأرسال :</b> <b>{amount} USDT</b>\n\n🆔 <b>إلى معرف بايننس</b>\n\n<code>{payId}</code>\n\n⚠️ <b>هام جدًا لتأكيد الدفع:</b>\n\nيجب عليك كتابة هذا الكود:\n\n<code>{note}</code>\n\nفي خانة الملاحظات (Note) عند التحويل.',
   binanceTransferCheckButton: '🧾 التحقق عبر معرف الطلب',
   binanceTransferSendOrderIdHint: 'قم بأرسال معرف الطلب هنا:',
   binanceTransferChecking: '⏳ جاري التحقق من دفعتك في بايننس، يرجى الانتظار بضع ثوانٍ...',
@@ -1550,179 +1319,6 @@ Object.assign(DEFAULT_TEXTS.ar, {
   binanceTransferHelp: 'ℹ️ استخدم الزر أدناه إذا أردت التحقق عبر معرف الطلب.',
   binanceTransferCheckByNotePending: '⏳ لم تظهر الحوالة بعد. إذا دفعت قبل قليل، انتظر قليلًا ثم جرّب عبر زر معرف الطلب.'
 });
-
-
-Object.assign(DEFAULT_TEXTS.en, {
-  activationRefundButton: '💸 Refund money',
-  activationRefundNoCharge: '✅ No amount was deducted from your balance, so nothing needs to be refunded.',
-  activationApprovedChargeFailedUser: '❌ Your request was approved, but your balance is no longer enough to complete activation. Please recharge and contact support.',
-  activationApprovedChargeFailedAdmin: '❌ Activation cannot be completed because the user balance is no longer enough.',
-  activationSupportAfterDone: '📞 Contact support',
-  priceInlineLabel: '{name} - {price} USD'
-});
-
-Object.assign(DEFAULT_TEXTS.ar, {
-  activationRefundButton: '💸 استرجاع الاموال',
-  activationRefundNoCharge: '✅ لم يتم خصم أي مبلغ من رصيدك، لذلك لا حاجة للاسترجاع.',
-  activationApprovedChargeFailedUser: '❌ تمت الموافقة على طلبك لكن رصيدك الحالي لم يعد كافياً لإكمال التفعيل. يرجى الشحن ثم التواصل مع الدعم.',
-  activationApprovedChargeFailedAdmin: '❌ لا يمكن إكمال التفعيل لأن رصيد المستخدم الحالي لم يعد كافياً.',
-  activationSupportAfterDone: '📞 تواصل مع الدعم',
-  priceInlineLabel: '{name} - {price} دولار'
-});
-
-
-Object.assign(DEFAULT_TEXTS.en, {
-  backupNow: '🗂 Send Backup Now',
-  restoreBackup: '♻️ Restore Backup File',
-  sendBackupStarted: '✅ Creating the backup file now...',
-  restoreBackupPrompt: '📥 Send the backup file here now as a JSON document.',
-  restoreBackupDone: '✅ Backup restore finished.\n\nAdded: {added}\nExisting: {existing}\nErrors: {errors}',
-  restoreBackupInvalid: '❌ Invalid backup file. Please send a valid JSON backup generated by this bot.',
-  restoreBackupNoDocument: '❌ Please send the backup file as a document.',
-  autoBackupCaption: '🗂 Automatic database backup\nTime: {time}',
-  manualBackupCaption: '🗂 Manual database backup\nTime: {time}'
-});
-
-Object.assign(DEFAULT_TEXTS.ar, {
-  backupNow: '🗂 ارسال نسخة احتياطية الآن',
-  restoreBackup: '♻️ استرجاع الملف',
-  sendBackupStarted: '✅ جاري إنشاء ملف النسخة الاحتياطية الآن...',
-  restoreBackupPrompt: '📥 أرسل الآن ملف النسخة الاحتياطية هنا على شكل ملف JSON.',
-  restoreBackupDone: '✅ اكتمل استرجاع النسخة الاحتياطية.\n\nتمت الإضافة: {added}\nالموجود مسبقاً: {existing}\nالأخطاء: {errors}',
-  restoreBackupInvalid: '❌ ملف النسخة الاحتياطية غير صالح. أرسل ملف JSON صحيح مولد من هذا البوت.',
-  restoreBackupNoDocument: '❌ يجب إرسال ملف النسخة الاحتياطية كملف.',
-  autoBackupCaption: '🗂 نسخة احتياطية تلقائية لقاعدة البيانات\nالوقت: {time}',
-  manualBackupCaption: '🗂 نسخة احتياطية يدوية لقاعدة البيانات\nالوقت: {time}'
-});
-
-function getBackupModelEntries() {
-  return [
-    ['User', User],
-    ['Setting', Setting],
-    ['Merchant', Merchant],
-    ['DigitalSection', DigitalSection],
-    ['PaymentMethod', PaymentMethod],
-    ['Code', Code],
-    ['BalanceTransaction', BalanceTransaction],
-    ['BinancePayPayment', BinancePayPayment],
-    ['DiscountCode', DiscountCode],
-    ['ReferralReward', ReferralReward],
-    ['RedeemService', RedeemService],
-    ['DepositConfig', DepositConfig],
-    ['ChannelConfig', ChannelConfig],
-    ['Captcha', Captcha],
-    ['ActivationRequest', ActivationRequest],
-    ['PrivateChannelCodePostCache', PrivateChannelCodePostCache]
-  ];
-}
-
-function getBackupUniqueWhere(modelName, row) {
-  switch (modelName) {
-    case 'Setting':
-      return { key: row.key, lang: row.lang };
-    case 'PrivateChannelCodePostCache':
-      return { channelChatId: row.channelChatId, messageId: row.messageId };
-    case 'DepositConfig':
-      return { currency: row.currency };
-    case 'DiscountCode':
-      return { code: row.code };
-    case 'PaymentMethod':
-      return { nameEn: row.nameEn, nameAr: row.nameAr, details: row.details };
-    case 'Merchant':
-      return { id: row.id };
-    case 'User':
-      return { id: row.id };
-    case 'DigitalSection':
-      return { id: row.id };
-    case 'Code':
-      return { id: row.id };
-    case 'BalanceTransaction':
-      return { id: row.id };
-    case 'BinancePayPayment':
-      return { id: row.id };
-    case 'ReferralReward':
-      return { id: row.id };
-    case 'RedeemService':
-      return { id: row.id };
-    case 'ChannelConfig':
-      return { id: row.id };
-    case 'Captcha':
-      return { userId: row.userId };
-    case 'ActivationRequest':
-      return { id: row.id };
-    default:
-      return row.id ? { id: row.id } : null;
-  }
-}
-
-async function buildDatabaseBackupPayload() {
-  const payload = {
-    meta: {
-      version: 1,
-      createdAt: new Date().toISOString(),
-      timezone: APP_TIMEZONE,
-      botUsername: await getBotUsername().catch(() => '')
-    },
-    tables: {}
-  };
-
-  for (const [name, model] of getBackupModelEntries()) {
-    const rows = await model.findAll({ raw: true, paranoid: false }).catch(() => []);
-    payload.tables[name] = rows;
-  }
-
-  return payload;
-}
-
-async function sendDatabaseBackupToAdmin(isAuto = false) {
-  const payload = await buildDatabaseBackupPayload();
-  const stamp = formatDateTimeForTimezone(new Date(), APP_TIMEZONE).replace(/[/: ]/g, '-');
-  const filePath = `/tmp/bot-backup-${isAuto ? 'auto' : 'manual'}-${stamp}.json`;
-  require('fs').writeFileSync(filePath, JSON.stringify(payload, null, 2), 'utf8');
-  await bot.sendDocument(ADMIN_ID, filePath, {
-    caption: await getText(ADMIN_ID, isAuto ? 'autoBackupCaption' : 'manualBackupCaption', { time: formatDateTimeForTimezone(new Date(), APP_TIMEZONE) })
-  }).catch(err => console.error('sendDatabaseBackupToAdmin error:', err.message));
-  return filePath;
-}
-
-async function restoreDatabaseBackupPayload(payload) {
-  const result = { added: 0, existing: 0, errors: 0 };
-  if (!payload || !payload.tables || typeof payload.tables !== 'object') {
-    throw new Error('invalid_payload');
-  }
-
-  for (const [name, model] of getBackupModelEntries()) {
-    const rows = Array.isArray(payload.tables[name]) ? payload.tables[name] : [];
-    for (const rawRow of rows) {
-      try {
-        const row = { ...rawRow };
-        const where = getBackupUniqueWhere(name, row);
-        if (!where) {
-          result.errors += 1;
-          continue;
-        }
-        const exists = await model.findOne({ where });
-        if (exists) {
-          result.existing += 1;
-          continue;
-        }
-        await model.create(row);
-        result.added += 1;
-      } catch (err) {
-        result.errors += 1;
-      }
-    }
-  }
-
-  return result;
-}
-
-function startAutomaticBackupScheduler() {
-  const everyFiveHoursMs = 5 * 60 * 60 * 1000;
-  setInterval(() => {
-    sendDatabaseBackupToAdmin(true).catch(err => console.error('auto backup error:', err.message));
-  }, everyFiveHoursMs);
-}
 
 function isAdmin(userId) {
   return Number(userId) === ADMIN_ID;
@@ -1778,17 +1374,6 @@ async function safeDeleteChatMessage(chatId, messageId) {
   if (!chatId || !messageId) return false;
   try {
     await bot.deleteMessage(chatId, messageId);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-
-async function safePinChatMessage(chatId, messageId) {
-  if (!chatId || !messageId) return false;
-  try {
-    await bot.pinChatMessage(chatId, messageId, { disable_notification: true });
     return true;
   } catch {
     return false;
@@ -2607,12 +2192,6 @@ function getDigitalSectionCategory(sectionId) {
   return `digital_section_${parseInt(sectionId, 10)}`;
 }
 
-const DIGITAL_MAIN_MENU_CATEGORY = 'digital_main_menu';
-
-function isDigitalMainMenuCategory(category) {
-  return String(category || '') === DIGITAL_MAIN_MENU_CATEGORY;
-}
-
 function parseDigitalSectionIdFromCategory(category) {
   const match = String(category || '').match(/^digital_section_(\d+)$/i);
   return match ? parseInt(match[1], 10) : null;
@@ -2662,30 +2241,6 @@ async function getDigitalProductsForSection(sectionId) {
     where: { category: getDigitalSectionCategory(sectionId) },
     order: [['id', 'ASC']]
   });
-}
-
-async function getDigitalMainMenuProducts() {
-  return await Merchant.findAll({
-    where: { category: DIGITAL_MAIN_MENU_CATEGORY },
-    order: [['id', 'ASC']]
-  });
-}
-
-async function getMerchantPlacementText(userId, merchant) {
-  if (isDigitalMainMenuCategory(merchant?.category)) {
-    return await getText(userId, 'digitalPlacementMainMenu');
-  }
-
-  const sectionId = parseDigitalSectionIdFromCategory(merchant?.category);
-  if (sectionId) {
-    const section = await DigitalSection.findByPk(sectionId);
-    if (section) {
-      const name = `${section.nameEn} / ${section.nameAr}`;
-      return await getText(userId, 'digitalPlacementSection', { name });
-    }
-  }
-
-  return await getText(userId, 'digitalPlacementMainMenu');
 }
 
 async function getChatGptDiscountThreshold() {
@@ -2745,226 +2300,6 @@ function getMerchantPlainDescription(merchant) {
   if (!merchant?.description) return '';
   if (merchant.description.type === 'text') return String(merchant.description.content || '').trim();
   return '';
-}
-
-
-function normalizeTelegramUrl(value) {
-  const raw = String(value || '').trim();
-  if (!raw) return '';
-  if (/^https?:\/\//i.test(raw)) return raw;
-  if (raw.startsWith('@')) return `https://t.me/${raw.slice(1)}`;
-  return `https://t.me/${raw.replace(/^@+/, '')}`;
-}
-
-function normalizeWhatsappUrl(value) {
-  const raw = String(value || '').trim();
-  if (!raw) return '';
-  if (/^https?:\/\//i.test(raw)) return raw;
-  const digits = raw.replace(/\D+/g, '');
-  return digits ? `https://wa.me/${digits}` : '';
-}
-
-function getMerchantMetaConfig(merchant) {
-  if (!merchant?.description || typeof merchant.description !== 'object' || Array.isArray(merchant.description)) return {};
-  return merchant.description.meta && typeof merchant.description.meta === 'object' ? { ...merchant.description.meta } : {};
-}
-
-function setMerchantMetaConfig(merchant, patch = {}) {
-  const description = merchant?.description && typeof merchant.description === 'object' && !Array.isArray(merchant.description)
-    ? { ...merchant.description }
-    : { type: 'text', content: '' };
-  description.meta = { ...getMerchantMetaConfig(merchant), ...patch };
-  merchant.description = description;
-  return description.meta;
-}
-
-function getMerchantSupportContacts(merchant) {
-  const meta = getMerchantMetaConfig(merchant);
-  const telegram = normalizeTelegramUrl(meta.supportTelegram || DEFAULT_SUPPORT_TELEGRAM_URL);
-  const whatsapp = normalizeWhatsappUrl(meta.supportWhatsapp || DEFAULT_SUPPORT_WHATSAPP_URL);
-  const extraLabel = String(meta.supportExtraLabel || '').trim();
-  const extraUrl = String(meta.supportExtraUrl || '').trim();
-  return { telegram, whatsapp, extraLabel, extraUrl };
-}
-
-async function isEmailActivationProduct(merchant) {
-  if (!merchant || !isDigitalSectionCategory(merchant.category)) return false;
-  const meta = getMerchantMetaConfig(merchant);
-  if (typeof meta.requiresEmailActivation === 'boolean') return meta.requiresEmailActivation;
-  const stock = await getMerchantAvailableStock(merchant.id);
-  return stock <= 0;
-}
-
-async function getActivationSupportReplyMarkup(userId, merchant) {
-  const contacts = getMerchantSupportContacts(merchant);
-  const rows = [];
-  if (contacts.telegram) rows.push([{ text: await getText(userId, 'openTelegram'), url: contacts.telegram }]);
-  if (contacts.whatsapp) rows.push([{ text: await getText(userId, 'openWhatsApp'), url: contacts.whatsapp }]);
-  if (contacts.extraLabel && contacts.extraUrl) rows.push([{ text: await getText(userId, 'openExtraContact', { label: contacts.extraLabel }), url: contacts.extraUrl }]);
-  rows.push([{ text: await getText(userId, 'back'), callback_data: 'back_to_menu' }]);
-  return { inline_keyboard: rows };
-}
-
-
-async function getActivationRejectedReplyMarkup(userId, merchant, requestId) {
-  const contacts = getMerchantSupportContacts(merchant);
-  const rows = [];
-  rows.push([{ text: await getText(userId, 'activationRefundButton'), callback_data: `activation_refund_${requestId}` }]);
-  if (contacts.telegram) rows.push([{ text: await getText(userId, 'openTelegram'), url: contacts.telegram }]);
-  if (contacts.whatsapp) rows.push([{ text: await getText(userId, 'openWhatsApp'), url: contacts.whatsapp }]);
-  if (contacts.extraLabel && contacts.extraUrl) rows.push([{ text: await getText(userId, 'openExtraContact', { label: contacts.extraLabel }), url: contacts.extraUrl }]);
-  rows.push([{ text: await getText(userId, 'back'), callback_data: 'back_to_menu' }]);
-  return { inline_keyboard: rows };
-}
-
-async function chargeActivationRequestOnApproval(request) {
-  const amount = Number(request?.chargedAmount || 0);
-  if (!request || amount <= 0) return { success: true, charged: false };
-  if (String(request.notes || '').includes('charged_on_activation')) {
-    return { success: true, charged: false, alreadyCharged: true };
-  }
-  const user = await User.findByPk(request.userId);
-  const currentBalance = Number(user?.balance || 0);
-  if (currentBalance < amount) {
-    return { success: false, reason: 'insufficient_balance', balance: currentBalance, amount };
-  }
-  const t = await sequelize.transaction();
-  try {
-    await User.update({ balance: currentBalance - amount }, { where: { id: request.userId }, transaction: t });
-    await BalanceTransaction.create({ userId: request.userId, amount: -amount, type: 'digital_activation_purchase', status: 'completed' }, { transaction: t });
-    request.notes = [String(request.notes || '').trim(), 'charged_on_activation'].filter(Boolean).join(' | ');
-    await request.save({ transaction: t });
-    await t.commit();
-    return { success: true, charged: true, newBalance: currentBalance - amount };
-  } catch (err) {
-    await t.rollback().catch(() => {});
-    console.error('chargeActivationRequestOnApproval error:', err);
-    return { success: false, reason: 'db_error' };
-  }
-}
-
-
-function getMerchantInviteGuideConfig(merchant) {
-  const meta = getMerchantMetaConfig(merchant);
-  return {
-    type: String(meta.inviteGuideType || '').trim(),
-    text: String(meta.inviteGuideText || '').trim(),
-    fileId: String(meta.inviteGuideFileId || '').trim(),
-    caption: String(meta.inviteGuideCaption || '').trim()
-  };
-}
-
-function getInviteGuideTypeLabel(lang, type) {
-  const normalizedLang = lang === 'ar' ? 'ar' : 'en';
-  const normalizedType = String(type || '').trim().toLowerCase();
-  if (normalizedType === 'text') return DEFAULT_TEXTS[normalizedLang]?.inviteGuideTextType || 'Text';
-  if (normalizedType === 'photo') return DEFAULT_TEXTS[normalizedLang]?.inviteGuidePhotoType || 'Photo';
-  if (normalizedType === 'video') return DEFAULT_TEXTS[normalizedLang]?.inviteGuideVideoType || 'Video';
-  return DEFAULT_TEXTS[normalizedLang]?.inviteGuideEmpty || '-';
-}
-
-async function sendInviteGuideToUser(userId, merchant) {
-  const guide = getMerchantInviteGuideConfig(merchant);
-  if (!guide.type) return false;
-
-  try {
-    if (guide.type === 'photo' && guide.fileId) {
-      await bot.sendPhoto(userId, guide.fileId, { caption: guide.caption || undefined });
-      return true;
-    }
-    if (guide.type === 'video' && guide.fileId) {
-      await bot.sendVideo(userId, guide.fileId, { caption: guide.caption || undefined });
-      return true;
-    }
-    if (guide.type === 'text' && guide.text) {
-      await bot.sendMessage(userId, guide.text);
-      return true;
-    }
-  } catch (err) {
-    console.error('sendInviteGuideToUser error:', err.message || err);
-  }
-
-  return false;
-}
-
-async function getActivationDelaySelectionMarkup(merchantId, targetUserId) {
-  return {
-    inline_keyboard: [
-      [{ text: await getText(ADMIN_ID, 'activationDelay1'), callback_data: `activation_delay_${merchantId}_${targetUserId}_1` }],
-      [{ text: await getText(ADMIN_ID, 'activationDelay2'), callback_data: `activation_delay_${merchantId}_${targetUserId}_2` }],
-      [{ text: await getText(ADMIN_ID, 'activationDelay3'), callback_data: `activation_delay_${merchantId}_${targetUserId}_3` }],
-      [{ text: await getText(ADMIN_ID, 'activationDelay4'), callback_data: `activation_delay_${merchantId}_${targetUserId}_4` }],
-      [{ text: await getText(ADMIN_ID, 'back'), callback_data: 'admin_digital_subscriptions' }]
-    ]
-  };
-}
-
-async function sendActivationRequestToAdmin(userId, merchant, email, amount) {
-  const user = await User.findByPk(userId);
-  const timestamp = formatAdminDateTime(new Date());
-  const service = `${merchant.nameEn} / ${merchant.nameAr}`;
-  const text = `${await getText(ADMIN_ID, 'activationRequestAdminTitle')}\n\n${await getText(ADMIN_ID, 'activationRequestAdminBody', {
-    service,
-    name: user?.first_name || user?.username || '-',
-    username: user?.username ? `@${user.username}` : '-',
-    userId,
-    email,
-    amount: formatUsdPrice(amount),
-    time: timestamp
-  })}`;
-  const sent = await bot.sendMessage(ADMIN_ID, text, {
-    reply_markup: {
-      inline_keyboard: [
-        [
-          { text: await getText(ADMIN_ID, 'activationApprove'), callback_data: `activation_approve_${merchant.id}_${userId}` },
-          { text: await getText(ADMIN_ID, 'activationReject'), callback_data: `activation_reject_${merchant.id}_${userId}` }
-        ],
-        [
-          { text: await getText(ADMIN_ID, 'activationDelayShort'), callback_data: `activation_delaypick_${merchant.id}_${userId}` }
-        ]
-      ]
-    }
-  });
-  return { sent, timestamp };
-}
-
-async function createActivationRequestRecord(userId, merchant, email, amount, adminMessageId = null) {
-  return await ActivationRequest.create({
-    userId,
-    merchantId: merchant.id,
-    email,
-    chargedAmount: amount,
-    adminMessageId,
-    status: 'pending',
-    notes: 'not_charged_yet'
-  });
-}
-
-async function showDigitalProductSupportAdmin(userId, merchantId) {
-  const merchant = await Merchant.findByPk(merchantId);
-  if (!merchant) {
-    await bot.sendMessage(userId, await getText(userId, 'error'));
-    return;
-  }
-  const contacts = getMerchantSupportContacts(merchant);
-  const lines = [
-    await getText(userId, 'inviteSupportTitle'),
-    await getText(userId, 'supportSettingsTitle', { name: `${merchant.nameEn} / ${merchant.nameAr}` }),
-    await getText(userId, 'currentSupportTelegram', { value: contacts.telegram || '-' }),
-    await getText(userId, 'currentSupportWhatsapp', { value: contacts.whatsapp || '-' }),
-    await getText(userId, 'currentSupportExtra', { value: contacts.extraLabel && contacts.extraUrl ? `${contacts.extraLabel} | ${contacts.extraUrl}` : '-' })
-  ];
-  await bot.sendMessage(userId, lines.join('\n\n'), {
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: await getText(userId, 'setProductTelegramSupport'), callback_data: `admin_set_product_telegram_${merchant.id}` }],
-        [{ text: await getText(userId, 'setProductWhatsappSupport'), callback_data: `admin_set_product_whatsapp_${merchant.id}` }],
-        [{ text: await getText(userId, 'setProductExtraSupport'), callback_data: `admin_set_product_extra_${merchant.id}` }],
-        [{ text: await getText(userId, 'clearProductExtraSupport'), callback_data: `admin_clear_product_extra_${merchant.id}` }],
-        [{ text: await getText(userId, 'back'), callback_data: `admin_digital_product_${merchant.id}` }]
-      ]
-    }
-  });
 }
 
 async function showChatGptPurchaseInfo(userId) {
@@ -3261,7 +2596,6 @@ async function deleteDigitalSectionAndContent(sectionId) {
 
 async function showDigitalSubscriptionsAdmin(userId) {
   const sections = await getAllDigitalSections();
-  const mainMenuProducts = await getDigitalMainMenuProducts();
   const broadcastEnabled = await getDigitalStockBroadcastEnabled();
   const keyboard = [
     [{ text: await getText(userId, 'addDigitalSectionToMainMenu'), callback_data: 'admin_digital_add_section' }],
@@ -3273,17 +2607,6 @@ async function showDigitalSubscriptionsAdmin(userId) {
       text: `${section.isActive ? '✅' : '⛔'} 🧩 ${section.nameEn} / ${section.nameAr}`,
       callback_data: `admin_digital_section_${section.id}`
     }]);
-  }
-
-  if (mainMenuProducts.length) {
-    keyboard.push([{ text: await getText(userId, 'mainMenuProductsHeader'), callback_data: 'ignore' }]);
-    for (const product of mainMenuProducts) {
-      const stock = await getMerchantAvailableStock(product.id);
-      keyboard.push([{
-        text: `👁 ${product.nameEn} / ${product.nameAr} - ${formatUsdPrice(product.price)} USD (${stock})`,
-        callback_data: `admin_digital_product_${product.id}`
-      }]);
-    }
   }
 
   keyboard.push([{ text: await getText(userId, 'back'), callback_data: 'admin' }]);
@@ -3304,11 +2627,6 @@ async function showDigitalSectionAdmin(userId, sectionId) {
   const products = await getDigitalProductsForSection(section.id);
   const statusText = await getDigitalSectionStatusText(userId, section);
   const keyboard = [
-    [{ text: await getText(userId, section.isActive ? 'toggleSectionMainMenuHide' : 'toggleSectionMainMenuShow'), callback_data: `admin_toggle_digital_section_visibility_${section.id}` }],
-    [
-      { text: await getText(userId, 'moveUp'), callback_data: `admin_move_digital_section_up_${section.id}` },
-      { text: await getText(userId, 'moveDown'), callback_data: `admin_move_digital_section_down_${section.id}` }
-    ],
     [{ text: await getText(userId, 'addDigitalProductInSection', { name: sectionName }), callback_data: `admin_digital_add_product_${section.id}` }],
     [{ text: await getText(userId, 'editDigitalSectionName'), callback_data: `admin_edit_digital_section_${section.id}` }],
     [{ text: await getText(userId, 'deleteDigitalSection'), callback_data: `admin_delete_digital_section_${section.id}` }]
@@ -3347,32 +2665,20 @@ async function showDigitalProductAdmin(userId, merchantId) {
     ? await getText(userId, 'typeBulk')
     : await getText(userId, 'typeSingle');
   const description = await getMerchantAdminDescriptionSummary(userId, merchant);
-  const placementText = await getMerchantPlacementText(userId, merchant);
-  const meta = getMerchantMetaConfig(merchant);
-  const inviteMode = Boolean(meta.inviteMode || meta.requiresEmailActivation);
-  const guide = getMerchantInviteGuideConfig(merchant);
-  const guideTypeLabel = guide.type ? getInviteGuideTypeLabel(userId === ADMIN_ID ? ((await User.findByPk(userId))?.lang || 'en') : 'en', guide.type) : await getText(userId, 'inviteGuideEmpty');
 
   await bot.sendMessage(
     userId,
-    `${await getText(userId, 'digitalProductManageText', {
+    await getText(userId, 'digitalProductManageText', {
       name: `${merchant.nameEn} / ${merchant.nameAr}`,
       price: formatUsdPrice(merchant.price),
-      stock: inviteMode ? await getText(userId, 'onDemandStock') : stock,
+      stock,
       type: typeText,
       createdAt: formatAdminDateTime(merchant.createdAt),
       description
-    })}
-${await getText(userId, 'digitalProductPlacementLine', { location: placementText })}
-${await getText(userId, inviteMode ? 'inviteModeOn' : 'inviteModeOff')}
-${await getText(userId, 'inviteGuideCurrent', { type: guideTypeLabel })}`,
+    }),
     {
       reply_markup: {
         inline_keyboard: [
-          [{ text: await getText(userId, inviteMode ? 'switchToStockMode' : 'switchToInviteMode'), callback_data: `admin_toggle_product_invite_${merchant.id}` }],
-          [{ text: await getText(userId, 'inviteGuideSettings'), callback_data: `admin_product_invite_guide_${merchant.id}` }],
-          [{ text: await getText(userId, 'moveDigitalProductToMainMenu'), callback_data: `admin_move_product_to_main_${merchant.id}` }],
-          [{ text: await getText(userId, 'moveDigitalProductToSection'), callback_data: `admin_choose_product_target_${merchant.id}` }],
           [{ text: await getText(userId, 'addDigitalProductStock'), callback_data: `admin_digital_add_stock_${merchant.id}` }],
           [{ text: await getText(userId, 'viewDigitalProductStock'), callback_data: `admin_view_digital_product_stock_${merchant.id}` }],
           [{ text: await getText(userId, 'searchDeleteDigitalProductStock'), callback_data: `admin_search_delete_digital_product_stock_${merchant.id}` }],
@@ -3381,7 +2687,6 @@ ${await getText(userId, 'inviteGuideCurrent', { type: guideTypeLabel })}`,
           [{ text: await getText(userId, 'editDigitalProductName'), callback_data: `admin_edit_digital_product_name_${merchant.id}` }],
           [{ text: await getText(userId, 'editDigitalProductPrice'), callback_data: `admin_edit_digital_product_price_${merchant.id}` }],
           [{ text: await getText(userId, 'editDigitalProductDescription'), callback_data: `admin_edit_digital_product_description_${merchant.id}` }],
-          [{ text: await getText(userId, 'contactSupportNow'), callback_data: `admin_product_support_${merchant.id}` }],
           [{ text: await getText(userId, 'deleteDigitalProduct'), callback_data: `admin_delete_digital_product_${merchant.id}` }],
           [{ text: await getText(userId, 'back'), callback_data: sectionId ? `admin_digital_section_${sectionId}` : 'admin_digital_subscriptions' }]
         ]
@@ -3412,13 +2717,12 @@ ${await getText(userId, 'digitalSectionEmpty')}`, {
   const buttons = [];
   for (const product of products) {
     const stock = await getMerchantAvailableStock(product.id);
-    const stockLabel = (await isEmailActivationProduct(product)) ? await getText(userId, 'onDemandStock') : stock;
     const name = await getMerchantDisplayName(product, userId);
     buttons.push([{
       text: await getText(userId, 'digitalProductListButton', {
         name,
         price: formatUsdPrice(product.price),
-        stock: stockLabel
+        stock
       }),
       callback_data: `digital_product_${product.id}`
     }]);
@@ -3443,17 +2747,13 @@ async function showDigitalProductDetails(userId, merchantId) {
   }
 
   const sectionId = parseDigitalSectionIdFromCategory(merchant.category);
-  const isMainMenuProduct = isDigitalMainMenuCategory(merchant.category);
   const section = sectionId ? await DigitalSection.findByPk(sectionId) : null;
-  if (!isMainMenuProduct && (!section || !section.isActive)) {
+  if (!section || !section.isActive) {
     await bot.sendMessage(userId, await getText(userId, 'error'));
     return;
   }
   const stock = await getMerchantAvailableStock(merchant.id);
-  const inviteModeForUser = await isEmailActivationProduct(merchant);
-  const stockLabel = inviteModeForUser ? await getText(userId, 'onDemandStock') : stock;
-  const baseName = await getMerchantDisplayName(merchant, userId);
-  const name = await getText(userId, 'priceInlineLabel', { name: baseName, price: formatUsdPrice(merchant.price) });
+  const name = await getMerchantDisplayName(merchant, userId);
   let details = await getMerchantDescriptionForUser(userId, merchant);
 
   if (!details) {
@@ -3475,13 +2775,13 @@ async function showDigitalProductDetails(userId, merchantId) {
   if (aiAssistantEnabled) {
     inlineKeyboard.push([{ text: await getText(userId, 'askAiAboutThisProduct'), callback_data: `ai_about_product_${merchant.id}` }]);
   }
-  inlineKeyboard.push([{ text: await getText(userId, 'back'), callback_data: sectionId ? `digital_section_${sectionId}` : 'back_to_menu' }]);
+  inlineKeyboard.push([{ text: await getText(userId, 'back'), callback_data: `digital_section_${sectionId}` }]);
 
   await bot.sendMessage(
     userId,
     `${await getText(userId, 'digitalProductDetailsText', {
       name,
-      stock: stockLabel,
+      stock,
       price: formatUsdPrice(merchant.price),
       details
     })}
@@ -4766,43 +4066,15 @@ function extractChatGptUpLinks(rawText) {
   return [...new Set(matches)];
 }
 
-function formatDateParts(date, timeZone = APP_TIMEZONE) {
+function formatDateParts(date) {
   const d = new Date(date);
-  if (Number.isNaN(d.getTime())) {
-    return {
-      year: '0000',
-      month: '00',
-      day: '00',
-      hour: '00',
-      minute: '00',
-      second: '00'
-    };
-  }
-
-  const formatter = new Intl.DateTimeFormat('en-GB', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false
-  });
-
-  const parts = Object.fromEntries(
-    formatter.formatToParts(d)
-      .filter(part => part.type !== 'literal')
-      .map(part => [part.type, part.value])
-  );
-
   return {
-    year: parts.year || '0000',
-    month: parts.month || '00',
-    day: parts.day || '00',
-    hour: parts.hour || '00',
-    minute: parts.minute || '00',
-    second: parts.second || '00'
+    year: d.getFullYear(),
+    month: String(d.getMonth() + 1).padStart(2, '0'),
+    day: String(d.getDate()).padStart(2, '0'),
+    hour: String(d.getHours()).padStart(2, '0'),
+    minute: String(d.getMinutes()).padStart(2, '0'),
+    second: String(d.getSeconds()).padStart(2, '0')
   };
 }
 
@@ -5748,8 +5020,8 @@ function getDefaultDepositValues(currency) {
       rate: 1,
       walletAddress: 'T...',
       instructions: 'Send USDT to one of the payment methods above.',
-      displayNameEn: 'Dollar',
-      displayNameAr: 'دولار',
+      displayNameEn: 'Binance',
+      displayNameAr: 'بايننس',
       templateEn: '💰 Send {amount} USDT to one of the following payment methods:\n\n{methods_block}\n\nThen send a screenshot of the payment with any message.\n\n{instructions}',
       templateAr: '💰 قم بإرسال {amount} USDT إلى إحدى طرق الدفع التالية:\n\n{methods_block}\n\nثم أرسل صورة التحويل مع أي رسالة.\n\n{instructions}',
       methods: [{ nameAr: 'بايننس', nameEn: 'Binance', value: '123456' }]
@@ -5759,7 +5031,7 @@ function getDefaultDepositValues(currency) {
     currency: 'IQD',
     rate: 1500,
     walletAddress: 'SuperKey...',
-    instructions: 'Complete the transfer using the selected payment method.',
+    instructions: 'Send IQD to one of the payment methods above.',
     displayNameEn: 'Iraqi Dinar',
     displayNameAr: 'دينار عراقي',
     templateEn: '💰 Send {amountIQD} Iraqi Dinar (≈ {amountUSD} USD at rate {rate} IQD/USD) to one of the following payment methods:\n\n{methods_block}\n\nThen send a screenshot of the payment with any message.\n\n{instructions}',
@@ -5947,17 +5219,12 @@ async function showDepositMethodsAdmin(userId, currency) {
   const config = await getDepositConfig(currency);
   const methods = normalizeDepositMethods(config.methods);
   const title = currency === 'IQD' ? await getText(userId, 'manageIQDMethods') : await getText(userId, 'manageUSDMethods');
-  const user = await User.findByPk(userId);
-  const lang = user?.lang === 'ar' ? 'ar' : 'en';
 
   let msg = `💳 *${title}*\n\n`;
   if (methods.length === 0) {
     msg += await getText(userId, 'noMethods');
   } else {
-    msg += methods.map((m, i) => {
-      const methodName = lang === 'ar' ? (m.nameAr || m.nameEn) : (m.nameEn || m.nameAr);
-      return `${i + 1}. ${methodName}\n\`${m.value}\``;
-    }).join('\n\n');
+    msg += methods.map((m, i) => `${i + 1}. ${m.nameAr || m.nameEn} / ${m.nameEn || m.nameAr}\n\`${m.value}\``).join('\n\n');
   }
 
   const keyboard = {
@@ -5974,12 +5241,7 @@ async function showDepositMethodsAdmin(userId, currency) {
 async function showDeleteDepositMethodsMenu(userId, currency) {
   const config = await getDepositConfig(currency);
   const methods = normalizeDepositMethods(config.methods);
-  const user = await User.findByPk(userId);
-  const lang = user?.lang === 'ar' ? 'ar' : 'en';
-  const buttons = methods.map((m, i) => [{
-    text: lang === 'ar' ? (m.nameAr || m.nameEn) : (m.nameEn || m.nameAr),
-    callback_data: `admin_confirm_delete_deposit_method_${currency}_${i}`
-  }]);
+  const buttons = methods.map((m, i) => [{ text: `${m.nameAr || m.nameEn} / ${m.nameEn || m.nameAr}`, callback_data: `admin_delete_deposit_method_${currency}_${i}` }]);
   buttons.push([{ text: await getText(userId, 'back'), callback_data: currency === 'IQD' ? 'admin_manage_iqd_methods' : 'admin_manage_usd_methods' }]);
   await bot.sendMessage(userId, await getText(userId, 'deleteDepositMethod'), { reply_markup: { inline_keyboard: buttons } });
 }
@@ -6007,21 +5269,16 @@ async function deleteDepositMethod(currency, index) {
 
 
 const DEFAULT_DEPOSIT_OPTION_VISIBILITY = {
-  IQD: true,
-  USD: true
+  IQD: false,
+  USD: false,
+  BINANCE_AUTO: true
 };
-
-const DEPOSIT_PRESET_AMOUNTS = [1, 3, 5, 7, 10, 15, 20, 30];
 
 async function getDepositOptionVisibility() {
   const setting = await Setting.findOne({ where: { key: 'deposit_option_visibility', lang: 'global' } });
   if (!setting) return { ...DEFAULT_DEPOSIT_OPTION_VISIBILITY };
   try {
-    const parsed = JSON.parse(setting.value);
-    return {
-      IQD: parsed?.IQD !== false,
-      USD: parsed?.USD !== false
-    };
+    return { ...DEFAULT_DEPOSIT_OPTION_VISIBILITY, ...JSON.parse(setting.value) };
   } catch {
     return { ...DEFAULT_DEPOSIT_OPTION_VISIBILITY };
   }
@@ -6031,10 +5288,7 @@ async function setDepositOptionVisibility(visibility) {
   await Setting.upsert({
     key: 'deposit_option_visibility',
     lang: 'global',
-    value: JSON.stringify({
-      IQD: visibility?.IQD !== false,
-      USD: visibility?.USD !== false
-    })
+    value: JSON.stringify(visibility)
   });
 }
 
@@ -6042,65 +5296,29 @@ async function showDepositOptionsAdmin(userId) {
   const visibility = await getDepositOptionVisibility();
   const keyboard = {
     inline_keyboard: [
-      [{ text: `${visibility.IQD ? '✅' : '❌'} ${await getText(userId, 'depositOptionIQD')}`, callback_data: 'admin_toggle_deposit_option_IQD' }],
-      [{ text: `${visibility.USD ? '✅' : '❌'} ${await getText(userId, 'depositOptionUSD')}`, callback_data: 'admin_toggle_deposit_option_USD' }],
+      [{ text: `${visibility.BINANCE_AUTO ? '✅' : '❌'} ${await getText(userId, 'depositOptionBinanceAuto')}`, callback_data: 'admin_toggle_deposit_option_BINANCE_AUTO' }],
       [{ text: await getText(userId, 'back'), callback_data: 'admin_manage_deposit_settings' }]
     ]
   };
   await bot.sendMessage(userId, await getText(userId, 'manageDepositOptions'), { reply_markup: keyboard });
 }
 
-async function getDepositMethodByIndex(currency, index) {
-  const config = await getDepositConfig(currency);
-  const methods = normalizeDepositMethods(config.methods);
-  const safeIndex = parseInt(index, 10);
-  if (!Number.isInteger(safeIndex) || safeIndex < 0 || safeIndex >= methods.length) return null;
-  return { config, method: methods[safeIndex], index: safeIndex };
-}
 
-async function getDepositMethodNameForUser(userId, currency, index) {
-  const user = await User.findByPk(userId);
-  const lang = user?.lang === 'ar' ? 'ar' : 'en';
-  const selected = await getDepositMethodByIndex(currency, index);
-  if (!selected?.method) return '';
-  return lang === 'ar'
-    ? (selected.method.nameAr || selected.method.nameEn || '')
-    : (selected.method.nameEn || selected.method.nameAr || '');
-}
-
+// -------------------------------------------------------------------
+// تعديل showCurrencyOptions لإضافة زر بايننس أوتوماتيكي
 async function showCurrencyOptions(userId) {
   const user = await User.findByPk(userId);
   const lang = user?.lang || 'en';
   const visibility = await getDepositOptionVisibility();
   const rows = [];
-
   if (visibility.BINANCE_AUTO !== false) rows.push([{ text: '⚡ Binance (USDT)', callback_data: 'deposit_binance_auto' }]);
-
-  for (const currency of ['IQD', 'USD']) {
-    if (visibility[currency] === false) continue;
-    const config = await getDepositConfig(currency);
-    const methods = normalizeDepositMethods(config.methods);
-    for (let i = 0; i < methods.length; i += 1) {
-      const methodName = await getDepositMethodNameForUser(userId, currency, i);
-      if (!methodName) continue;
-      rows.push([{ text: `💳 ${methodName}`, callback_data: `deposit_pick_${currency}_${i}` }]);
-    }
-  }
-
-  if (!rows.length) {
-    await bot.sendMessage(userId, await getText(userId, 'noMethods'), {
-      reply_markup: { inline_keyboard: [[{ text: await getText(userId, 'back'), callback_data: 'back_to_menu' }]] }
-    });
-    return;
-  }
-
   rows.push([{ text: await getText(userId, 'back'), callback_data: 'back_to_menu' }]);
 
-  const extraText = visibility.BINANCE_AUTO === false ? '' : (lang === 'ar' ? '\n\nطريقة الشحن الحالية: ⚡ Binance (USDT)' : '\n\nCurrent topup method: ⚡ Binance (USDT)');
+  const extraText = visibility.BINANCE_AUTO === false ? '' : (lang === 'ar'
+    ? '\n\nطريقة الشحن الحالية: ⚡ Binance (USDT)'
+    : '\n\nCurrent topup method: ⚡ Binance (USDT)');
 
-  await bot.sendMessage(userId, `${await getText(userId, 'chooseCurrency')}${extraText}`, {
-    reply_markup: { inline_keyboard: rows }
-  });
+  await bot.sendMessage(userId, `${await getText(userId, 'chooseCurrency')}${extraText}`, { reply_markup: { inline_keyboard: rows } });
 }
 
 async function showBinanceAutoAmountOptions(userId) {
@@ -6131,12 +5349,30 @@ async function getBinanceTransferReplyMarkup(userId) {
   };
 }
 
-async function sendBinanceAutoInstructions(userId, amount) {
-  const apiKey = String(BINANCE_API_KEY || '').trim();
-  const apiSecret = String(BINANCE_API_SECRET || '').trim();
-  const payId = String(BINANCE_PAY_ID || '').trim();
+async function sendLegacyBinanceAutoInstructions(userId, amount) {
+  return sendBinanceAutoInstructions(userId, amount);
+}
 
-  if (!apiKey || !apiSecret || !payId) {
+function scheduleBinanceTransferImmediateChecks(userId) {
+  for (const delayMs of BINANCE_TRANSFER_IMMEDIATE_CHECK_DELAYS_MS) {
+    const timer = setTimeout(async () => {
+      try {
+        const pendingUser = await User.findByPk(userId, { attributes: ['state'] });
+        const pendingState = safeParseState(pendingUser?.state);
+        if (pendingState?.action !== 'binance_transfer_pending') return;
+        await processBinanceAutoVerification(userId, pendingState, { rawInput: '', silent: true });
+      } catch (err) {
+        console.error(`Binance transfer immediate check error for user ${userId}:`, err.message);
+      }
+    }, delayMs);
+
+    if (typeof timer?.unref === 'function') timer.unref();
+  }
+}
+
+async function sendBinanceAutoInstructions(userId, amount) {
+  const credentials = await getBinanceCredentials();
+  if (!credentials?.apiKey || !credentials?.apiSecret || !credentials?.payId) {
     await bot.sendMessage(userId, await getText(userId, 'binanceTransferNotConfigured')).catch(() => {});
     return;
   }
@@ -6149,13 +5385,13 @@ async function sendBinanceAutoInstructions(userId, amount) {
     amount: Number(amount),
     currency: 'USDT',
     note,
-    payId,
+    payId: String(credentials.payId || BINANCE_PAY_ID || '').trim(),
     createdAt: Date.now()
   });
 
   const message = await getText(userId, 'binanceTransferInstructions', {
     amount: escapeHtml(normalizedAmount),
-    payId: escapeHtml(payId),
+    payId: escapeHtml(String(credentials.payId || BINANCE_PAY_ID || '').trim()),
     note: escapeHtml(note)
   });
 
@@ -6163,82 +5399,18 @@ async function sendBinanceAutoInstructions(userId, amount) {
     parse_mode: 'HTML',
     reply_markup: await getBinanceTransferReplyMarkup(userId)
   });
+
+  scheduleBinanceTransferImmediateChecks(userId);
 }
 
-async function showDepositAmountOptionsForMethod(userId, currency, index) {
-  const methodName = await getDepositMethodNameForUser(userId, currency, index);
-  if (!methodName) {
-    await bot.sendMessage(userId, await getText(userId, 'error'));
-    return;
-  }
-
-  const buttons = DEPOSIT_PRESET_AMOUNTS.map(amount => ([{ text: `${amount}$`, callback_data: `deposit_amount_${currency}_${index}_${amount}` }]));
-  buttons.push([{ text: await getText(userId, 'back'), callback_data: 'deposit' }]);
-
-  await bot.sendMessage(userId, await getText(userId, 'chooseDepositAmountForMethod', { method: methodName }), {
-    reply_markup: { inline_keyboard: buttons }
-  });
-}
-
-async function sendSelectedDepositMethodInstructions(userId, currency, index, amount) {
-  const selected = await getDepositMethodByIndex(currency, index);
-  if (!selected?.method) {
-    await bot.sendMessage(userId, await getText(userId, 'error'));
-    return;
-  }
-
-  const user = await User.findByPk(userId);
-  const lang = user?.lang === 'ar' ? 'ar' : 'en';
-  const config = selected.config;
-  const method = selected.method;
-  const usdAmount = Number(amount);
-  const iqdAmount = currency === 'IQD'
-    ? Number(usdAmount * Number(config.rate || 1500)).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
-    : null;
-  const methodName = lang === 'ar'
-    ? (method.nameAr || method.nameEn || '')
-    : (method.nameEn || method.nameAr || '');
-  const methodDetails = String(method.value || '').trim();
-  const createdAt = Date.now();
-
-  const messageText = currency === 'IQD'
-    ? await getText(userId, 'depositMethodInstructionsIQD', {
-      method: methodName,
-      amountUSD: formatUsdPrice(usdAmount),
-      amountIQD: iqdAmount,
-      rate: formatUsdPrice(config.rate || 1500),
-      details: methodDetails,
-      time: formatAdminDateTime(createdAt)
-    })
-    : await getText(userId, 'depositMethodInstructionsUSD', {
-      method: methodName,
-      amountUSD: formatUsdPrice(usdAmount),
-      details: methodDetails,
-      time: formatAdminDateTime(createdAt)
-    });
-
-  await bot.sendMessage(userId, messageText, {
-    parse_mode: 'HTML',
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: await getText(userId, 'donePayment'), callback_data: 'deposit_done_send_proof' }],
-        [{ text: await getText(userId, 'back'), callback_data: `deposit_pick_${currency}_${index}` }],
-        [{ text: await getText(userId, 'cancel'), callback_data: 'cancel_action' }]
-      ]
-    }
-  });
-
-  await setUserState(userId, {
-    action: 'deposit_waiting_done',
-    currency,
-    methodIndex: Number(index),
-    amountUSD: usdAmount,
-    createdAt
-  });
-}
 
 async function showPaymentMethodsForDeposit(userId, amount, currency) {
-  await showCurrencyOptions(userId);
+  const msg = await renderDepositMessage(userId, currency, amount);
+  await bot.sendMessage(userId, msg, {
+    parse_mode: 'Markdown',
+    reply_markup: await getBackAndCancelReplyMarkup(userId, 'deposit')
+  });
+  await setUserState(userId, { action: 'deposit_awaiting_proof', amount, currency });
 }
 
 const BINANCE_PAY_CERT_CACHE = {
@@ -7936,30 +7108,96 @@ function buildBinanceDuplicateCandidates(rawInput, checkResult = {}) {
 }
 
 async function checkBinanceDeposit(orderNumber, expectedAmountUSDT, options = {}) {
+  const credentials = await getBinanceCredentials();
+  if (!credentials?.apiKey || !credentials?.apiSecret) {
+    console.error('❌ Binance API keys missing');
+    return { success: false, reason: 'binance_not_configured' };
+  }
+
   const expected = Number(expectedAmountUSDT || 0);
-  const normalizedOrderId = looksLikeBinanceTransferOrderId(orderNumber) ? normalizeBinanceTransferOrderId(orderNumber) : '';
-  if (!Number.isFinite(expected) || expected <= 0) {
+  const wantedIdentifier = normalizeBinanceIdentifier(orderNumber);
+  if (!wantedIdentifier || !Number.isFinite(expected) || expected <= 0) {
     return { success: false, reason: 'invalid_payload' };
   }
 
-  const result = await verifyBinanceTransfer({
-    apiKey: String(BINANCE_API_KEY || '').trim(),
-    apiSecret: String(BINANCE_API_SECRET || '').trim(),
-    payId: String(BINANCE_PAY_ID || '').trim(),
-    expectedAmount: expected,
-    expectedNote: String(options.expectedNote || '').trim(),
-    orderIdToCheck: normalizedOrderId || '',
-    sessionCreatedAt: options.sessionCreatedAt || null,
-    recentWindowMs: normalizedOrderId ? (60 * 60 * 1000) : undefined
-  });
+  const fetched = await fetchCandidateBinanceTransactionsFast(credentials, options.sessionCreatedAt);
+  if (!fetched.ok) {
+    return { success: false, reason: 'api_error', error: fetched.error || null };
+  }
 
-  return result || { success: false, reason: 'api_error' };
+  const rows = fetched.rows || [];
+  const matchedRows = rows.filter(item => (
+    doesBinanceAmountMatch(item, expected)
+    && isLikelyIncomingBinancePayment(item, credentials.payId || null)
+    && itemMatchesBinanceOrder(item, wantedIdentifier)
+  ));
+
+  if (matchedRows.length === 1) {
+    const matchedItem = matchedRows[0];
+    return {
+      success: true,
+      method: 'exact_order_id',
+      amount: getBinanceHistoryAmountUSDT(matchedItem),
+      txId: matchedItem.transactionId || matchedItem.orderId || matchedItem.prepayId || getBinanceTransactionUniqueKey(matchedItem) || orderNumber,
+      rawOrderId: orderNumber,
+      currency: 'USDT',
+      transactionTime: getBinanceTransactionTime(matchedItem) || getBinanceClientNowMs(),
+      orderType: matchedItem.orderType || null,
+      payId: credentials.payId || null,
+      matchedItem,
+      searchedRows: rows.length,
+      matchedRows: matchedRows.length,
+      amountMatchedRows: matchedRows.length,
+      payIdMatchedRows: matchedRows.length,
+      matchScore: 100
+    };
+  }
+
+  return {
+    success: false,
+    reason: matchedRows.length > 1 ? 'ambiguous_match' : 'no_match',
+    searchedRows: rows.length,
+    matchedRows: matchedRows.length,
+    amountMatchedRows: matchedRows.length,
+    payIdMatchedRows: matchedRows.length,
+    payId: credentials.payId || null
+  };
+}
+
+async function getOrCreateBinanceTransferPaymentMethod(transaction = null) {
+  let paymentMethod = await PaymentMethod.findOne({ where: { type: 'binance_note_order' }, transaction }).catch(() => null);
+  if (paymentMethod) return paymentMethod;
+
+  return PaymentMethod.create({
+    nameEn: 'Binance',
+    nameAr: 'بايننس',
+    details: 'Binance transfer verified by note or order id',
+    type: 'binance_note_order',
+    config: { mode: 'note_or_order_id' },
+    isActive: true,
+    minDeposit: 1.0,
+    maxDeposit: 10000.0
+  }, { transaction });
+}
+
+async function reconcilePendingBinanceTransferOrders() {
+  const users = await User.findAll({ where: { state: { [Op.like]: '%binance_transfer_pending%' } }, attributes: ['id', 'state'] }).catch(() => []);
+  for (const user of users || []) {
+    const state = safeParseState(user.state);
+    if (state?.action !== 'binance_transfer_pending') continue;
+    try {
+      await processBinanceAutoVerification(user.id, state, { rawInput: '', silent: true });
+    } catch (err) {
+      console.error(`Binance transfer reconcile error for user ${user.id}:`, err.message);
+    }
+  }
 }
 
 async function processBinanceAutoVerification(userId, state, options = {}) {
   const user = await User.findByPk(userId);
   if (!user) return { handled: false };
 
+  const lang = user.lang === 'ar' ? 'ar' : 'en';
   const expectedAmount = Number(state?.amount || 0);
   const note = String(state?.note || '').trim();
   const rawInput = String(options.rawInput || '').trim();
@@ -7973,61 +7211,149 @@ async function processBinanceAutoVerification(userId, state, options = {}) {
 
   if (normalizedInput) {
     const existing = await BalanceTransaction.findOne({
-      where: { type: 'deposit', status: 'completed', txid: normalizedInput }
+      where: {
+        type: 'deposit',
+        status: 'completed',
+        txid: normalizedInput
+      }
     });
+
     if (existing) {
       await bot.sendMessage(userId, await getText(userId, 'binanceTransferDuplicate'));
       return { handled: true, success: false, reason: 'duplicate_tx' };
     }
   }
 
-  if (!String(BINANCE_API_KEY || '').trim() || !String(BINANCE_API_SECRET || '').trim() || !(state?.payId || String(BINANCE_PAY_ID || '').trim())) {
+  const credentials = await getBinanceCredentials();
+  if (!credentials?.apiKey || !credentials?.apiSecret || !(state?.payId || credentials?.payId)) {
     await bot.sendMessage(userId, await getText(userId, 'binanceTransferNotConfigured'));
     return { handled: true, success: false, reason: 'binance_not_configured' };
   }
 
-  if (!options.silent) await bot.sendMessage(userId, await getText(userId, 'binanceTransferChecking'));
+  if (!options.silent) {
+    await bot.sendMessage(userId, await getText(userId, 'binanceTransferChecking'));
+  }
 
-  const checkResult = await checkBinanceDeposit(rawInput, expectedAmount, {
+  const checkResult = await verifyBinanceTransfer({
+    apiKey: credentials.apiKey,
+    apiSecret: credentials.apiSecret,
+    payId: state?.payId || credentials?.payId || '',
+    expectedAmount,
+    expectedNote: note,
+    orderIdToCheck: normalizedInput || '',
     sessionCreatedAt: state?.createdAt || null,
-    expectedNote: note
+    recentWindowMs: normalizedInput ? (60 * 60 * 1000) : undefined
   });
 
   if (!checkResult.success) {
-    if (options.silent) return { handled: true, success: false, reason: checkResult.reason || 'not_found' };
-    if (checkResult.reason === 'expired_order_id') {
-      await bot.sendMessage(userId, await getText(userId, 'binanceTransferOrderIdExpired'), { reply_markup: await getBinanceTransferReplyMarkup(userId) });
+    if (options.silent) {
+      return { handled: true, success: false, reason: checkResult.reason || 'not_found' };
+    }
+    if (checkResult.reason === 'api_error') {
+      await bot.sendMessage(userId, getBinanceVerificationFailureReason('api_error', lang));
+    } else if (checkResult.reason === 'expired_order_id') {
+      await bot.sendMessage(userId, await getText(userId, 'binanceTransferOrderIdExpired'), {
+        reply_markup: await getBinanceTransferReplyMarkup(userId)
+      });
     } else if (!normalizedInput) {
-      await bot.sendMessage(userId, await getText(userId, 'binanceTransferCheckByNotePending'), { reply_markup: await getBinanceTransferReplyMarkup(userId) });
+      await bot.sendMessage(userId, await getText(userId, 'binanceTransferCheckByNotePending'), {
+        reply_markup: await getBinanceTransferReplyMarkup(userId)
+      });
     } else {
-      await bot.sendMessage(userId, await getText(userId, 'binanceTransferNotFound'), { reply_markup: await getBinanceTransferReplyMarkup(userId) });
+      await bot.sendMessage(userId, await getText(userId, 'binanceTransferNotFound'), {
+        reply_markup: await getBinanceTransferReplyMarkup(userId)
+      });
     }
     return { handled: true, success: false, reason: checkResult.reason || 'not_found' };
   }
 
-  const transactionKey = normalizedInput || String(checkResult.orderId || checkResult.txId || '').trim();
+  if (normalizedInput) {
+    const ageMs = Math.max(0, Date.now() - Number(checkResult.transactionTime || 0));
+    if (!Number.isFinite(ageMs) || ageMs > (60 * 60 * 1000)) {
+      await bot.sendMessage(userId, await getText(userId, 'binanceTransferOrderIdExpired'), {
+        reply_markup: await getBinanceTransferReplyMarkup(userId)
+      });
+      return { handled: true, success: false, reason: 'expired_order_id' };
+    }
+  }
+
+  const matchedOrderId = normalizeBinanceTransferOrderId(checkResult.orderId || normalizedInput || '');
+  const duplicateKey = matchedOrderId || normalizedInput || note;
+
   const t = await sequelize.transaction();
   try {
     const freshUser = await User.findByPk(userId, { transaction: t, lock: t.LOCK.UPDATE });
+    const existingDeposit = await BalanceTransaction.findOne({
+      where: {
+        type: 'deposit',
+        status: 'completed',
+        txid: duplicateKey
+      },
+      transaction: t,
+      lock: t.LOCK.UPDATE
+    });
+
+    if (existingDeposit) {
+      await t.rollback().catch(() => {});
+      await bot.sendMessage(userId, await getText(userId, 'binanceTransferDuplicate'));
+      return { handled: true, success: false, reason: 'duplicate_tx' };
+    }
+
+    const paymentMethod = await getOrCreateBinanceTransferPaymentMethod(t);
     const newBalance = parseFloat(freshUser.balance || 0) + expectedAmount;
+
     await User.update({ balance: newBalance }, { where: { id: userId }, transaction: t });
     await BalanceTransaction.create({
       userId,
       amount: expectedAmount,
       type: 'deposit',
+      paymentMethodId: paymentMethod.id,
       status: 'completed',
-      txid: transactionKey || note,
-      caption: `Binance Transfer | orderId=${normalizedInput || '-'} | tx=${checkResult.txId || '-'} | payId=${state?.payId || BINANCE_PAY_ID || '-'} | note=${note}`
+      txid: duplicateKey,
+      caption: `Binance | method=${checkResult.method} | note=${note} | input=${rawInput || '-'} | orderId=${matchedOrderId || '-'} | payId=${state?.payId || credentials?.payId || '-'} | amount=${expectedAmount} | searched=${checkResult.searchedRows || 0}`
     }, { transaction: t });
+
     await t.commit();
+
     await clearUserState(userId);
-    await bot.sendMessage(userId, await getText(userId, 'binanceTransferVerified', { amount: formatUsdPrice(expectedAmount), balance: formatUsdPrice(newBalance) }), { parse_mode: 'HTML' });
+    await bot.sendMessage(userId, await getText(userId, 'binanceTransferVerified', {
+      amount: escapeHtml(formatUsdPrice(expectedAmount)),
+      balance: escapeHtml(newBalance.toFixed(2))
+    }), { parse_mode: 'HTML' });
+
+    const identity = await getTelegramIdentityById(userId);
+    await bot.sendMessage(ADMIN_ID,
+      `💰 Binance Deposit
+
+` +
+      `Name: ${identity.fullName}
+` +
+      `Username: ${identity.usernameText}
+` +
+      `ID: ${userId}
+` +
+      `Amount: ${formatUsdPrice(expectedAmount)} USDT
+` +
+      `Order ID: ${matchedOrderId || '-'}
+` +
+      `Note: ${note}
+` +
+      `Method: ${checkResult.method}
+` +
+      `Binance ID: ${state?.payId || credentials?.payId || BINANCE_PAY_ID || '-'}
+` +
+      `Rows searched: ${checkResult.searchedRows || 0}
+`
+    ).catch(() => {});
+
     await sendMainMenu(userId);
-    return { handled: true, success: true };
+    return { handled: true, success: true, orderId: matchedOrderId || duplicateKey };
   } catch (err) {
     await t.rollback().catch(() => {});
     console.error('processBinanceAutoVerification transaction error:', err);
-    await bot.sendMessage(userId, await getText(userId, 'error'));
+    await bot.sendMessage(userId, lang === 'ar'
+      ? '❌ حدث خطأ أثناء إضافة الرصيد. حاول مرة أخرى أو تواصل مع الدعم.'
+      : '❌ An error occurred while adding the balance. Please try again or contact support.');
     return { handled: true, success: false, reason: 'db_error' };
   }
 }
@@ -8043,7 +7369,6 @@ async function sendMainMenu(userId) {
   const aiAssistantEnabled = await getAiAssistantEnabled();
   const currentBalanceLine = await getCurrentBalanceLineText(userId);
   const digitalSections = await getDigitalSections();
-  const mainMenuProducts = await getDigitalMainMenuProducts();
   const digitalSectionMap = new Map(digitalSections.map(section => [getDigitalSectionCategory(section.id), section]));
 
   const buttonLabels = {
@@ -8083,20 +7408,6 @@ async function sendMainMenu(userId) {
     }
   }
 
-  for (const product of mainMenuProducts) {
-    const stock = await getMerchantAvailableStock(product.id);
-    const stockLabel = (await isEmailActivationProduct(product)) ? await getText(userId, 'onDemandStock') : stock;
-    const name = await getMerchantDisplayName(product, userId);
-    buttons.push([{
-      text: await getText(userId, 'digitalProductListButton', {
-        name,
-        price: formatUsdPrice(product.price),
-        stock
-      }),
-      callback_data: `digital_product_${product.id}`
-    }]);
-  }
-
   await bot.sendMessage(userId, `${await getText(userId, 'menu')}
 
 ${currentBalanceLine}`, {
@@ -8109,11 +7420,18 @@ async function showAdminPanel(userId) {
 
   const keyboard = {
     inline_keyboard: [
-      [{ text: await getText(userId, 'paymentMethods'), callback_data: 'admin_manage_deposit_settings' }],
+      [{ text: await getText(userId, 'manageBots'), callback_data: 'admin_manage_bots' }],
       [{ text: await getText(userId, 'manageMenuButtons'), callback_data: 'admin_manage_menu_buttons' }],
+      [{ text: await getText(userId, 'manageChannel'), callback_data: 'admin_manage_channel' }],
+      [{ text: '📦 قناة الكودات الخاصة', callback_data: 'admin_private_codes_channel' }],
+      [{ text: await getText(userId, 'manageDepositSettings'), callback_data: 'admin_manage_deposit_settings' }],
       [{ text: await getText(userId, 'digitalSubscriptions'), callback_data: 'admin_digital_subscriptions' }],
+      [{ text: await getText(userId, 'addMerchant'), callback_data: 'admin_add_merchant' }],
+      [{ text: await getText(userId, 'listMerchants'), callback_data: 'admin_list_merchants' }],
       [{ text: await getText(userId, 'setPrice'), callback_data: 'admin_set_price' }],
+      [{ text: await getText(userId, 'setChatgptPrice'), callback_data: 'admin_set_chatgpt_price' }],
       [{ text: await getText(userId, 'addCodes'), callback_data: 'admin_add_codes' }],
+      [{ text: await getText(userId, 'paymentMethods'), callback_data: 'admin_payment_methods' }],
       [{ text: await getText(userId, 'stats'), callback_data: 'admin_stats' }],
       [{ text: await getText(userId, 'referralSettings'), callback_data: 'admin_referral_settings' }],
       [{ text: await getText(userId, 'manageRedeemServices'), callback_data: 'admin_manage_redeem_services' }],
@@ -8124,15 +7442,12 @@ async function showAdminPanel(userId) {
       [{ text: await getText(userId, 'balanceManagement'), callback_data: 'admin_balance_management' }],
       [{ text: await getText(userId, 'sendAnnouncement'), callback_data: 'admin_send_announcement' }],
       [{ text: await getText(userId, 'editCodeDeliveryMessage'), callback_data: 'admin_edit_code_delivery_message' }],
-      [{ text: await getText(userId, 'backupNow'), callback_data: 'admin_send_backup_now' }],
-      [{ text: await getText(userId, 'restoreBackup'), callback_data: 'admin_restore_backup_prompt' }],
       [{ text: await getText(userId, 'back'), callback_data: 'back_to_menu' }]
     ]
   };
 
   await bot.sendMessage(userId, await getText(userId, 'adminPanel'), { reply_markup: keyboard });
 }
-
 
 async function showReferralSettingsAdmin(userId) {
   const percent = await getReferralPercent();
@@ -8197,7 +7512,9 @@ async function showReferralStockSettingsAdmin(userId) {
       [{ text: await getText(userId, 'addReferralStockCodes'), callback_data: 'admin_add_referral_stock_codes' }],
       [{ text: await getText(userId, 'viewReferralStockCount'), callback_data: 'admin_view_referral_stock_count' }],
       [{ text: await getText(userId, 'searchReferralStockDuplicates'), callback_data: 'admin_search_referral_stock_duplicates' }],
+      [{ text: await getText(userId, 'importReferralStockFromPrivateChannel'), callback_data: 'admin_import_referral_stock_from_private_channel' }],
       [{ text: await getText(userId, 'searchDeleteReferralStockCodes'), callback_data: 'admin_prompt_delete_referral_stock_codes' }],
+      [{ text: await getText(userId, 'privateReferralChannelButton'), callback_data: 'admin_referral_codes_channel' }],
       [{ text: await getText(userId, 'back'), callback_data: 'admin_referral_settings' }]
     ]
   };
@@ -8522,7 +7839,7 @@ async function processPurchase(userId, merchantId, quantity, discountCode = null
   }
 }
 
-async function requestDeposit(userId, amount, currency, message, imageFileId = null, tgUser = null, meta = {}) {
+async function requestDeposit(userId, amount, currency, message, imageFileId = null, tgUser = null) {
   const now = new Date();
   const deposit = await BalanceTransaction.create({
     userId,
@@ -8531,23 +7848,18 @@ async function requestDeposit(userId, amount, currency, message, imageFileId = n
     status: 'pending',
     imageFileId,
     caption: message,
-    txid: `${currency}_${Date.now()}`,
+    txid: currency,
     lastReminderAt: now
   });
 
   const config = await getDepositConfig(currency);
-  const submittedParts = formatDateParts(now);
-  const selectedParts = formatDateParts(meta?.selectedAt || now);
+  const parts = formatDateParts(new Date());
   const usernameText = tgUser?.username ? `@${tgUser.username}` : 'لا يوجد';
   const fullName = [tgUser?.first_name, tgUser?.last_name].filter(Boolean).join(' ').trim() || 'لا يوجد';
   const amountUSD = Number(amount).toFixed(2);
-  const amountIQD = currency === 'IQD'
-    ? Number(amount * Number(config.rate || 1500)).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
-    : '-';
-  const methodName = String(meta?.methodName || '').trim() || (currency === 'IQD' ? 'طريقة دفع عراقية' : 'Dollar payment method');
-  const methodValue = String(meta?.methodValue || '').trim() || '-';
+  const amountIQD = Number(amount * config.rate).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
   const currencyDisplay = currency === 'USD'
-    ? `${config.displayNameAr || 'دولار'} / ${config.displayNameEn || 'Dollar'}`
+    ? `${config.displayNameAr || 'بايننس'} / ${config.displayNameEn || 'Binance'}`
     : `${config.displayNameAr || 'دينار عراقي'} / ${config.displayNameEn || 'Iraqi Dinar'}`;
 
   const notifText =
@@ -8555,14 +7867,14 @@ async function requestDeposit(userId, amount, currency, message, imageFileId = n
     `المعرف: ${usernameText}\n` +
     `الاسم: ${fullName}\n` +
     `الايدي: ${userId}\n\n` +
-    `طريقة الدفع: ${methodName}\n` +
-    `تفاصيل الطريقة: ${methodValue}\n` +
     `العملة المختارة: ${currencyDisplay}\n` +
     `المبلغ بالدولار: ${amountUSD} USD\n` +
     `المبلغ بالدينار: ${amountIQD} IQD\n\n` +
     `الرسالة: ${String(message || '').trim() || 'No message'}\n\n` +
-    `وقت إنشاء الطلب: ${selectedParts.year}-${selectedParts.month}-${selectedParts.day} ${selectedParts.hour}:${selectedParts.minute}:${selectedParts.second}\n` +
-    `وقت إرسال الإثبات: ${submittedParts.year}-${submittedParts.month}-${submittedParts.day} ${submittedParts.hour}:${submittedParts.minute}:${submittedParts.second}`;
+    `السنة: ${parts.year}\n` +
+    `الشهر: ${parts.month}\n` +
+    `اليوم: ${parts.day}\n` +
+    `الساعة: ${parts.hour}:${parts.minute}:${parts.second}`;
 
   let receiptMsg;
   if (imageFileId) {
@@ -8947,22 +8259,6 @@ bot.on('callback_query', async query => {
     const cleanupPressedMessage = async () => cleanupCallbackSourceMessage(query, userId);
     await findOrCreateUser(userId);
 
-    if (data === 'admin_send_backup_now' && isAdmin(userId)) {
-      await bot.answerCallbackQuery(query.id);
-      await bot.sendMessage(userId, await getText(userId, 'sendBackupStarted'));
-      await sendDatabaseBackupToAdmin(false);
-      return;
-    }
-
-    if (data === 'admin_restore_backup_prompt' && isAdmin(userId)) {
-      await setUserState(userId, { action: 'awaiting_backup_restore_file' });
-      await bot.sendMessage(userId, await getText(userId, 'restoreBackupPrompt'), {
-        reply_markup: { inline_keyboard: [[{ text: await getText(userId, 'cancel'), callback_data: 'cancel_action' }],[{ text: await getText(userId, 'back'), callback_data: 'admin' }]] }
-      });
-      await bot.answerCallbackQuery(query.id);
-      return;
-    }
-
     if (!isAdmin(userId) && !(await getBotEnabled())) {
       await bot.answerCallbackQuery(query.id).catch(() => {});
       await bot.sendMessage(userId, await getText(userId, 'botPausedMessage')).catch(() => {});
@@ -9322,162 +8618,6 @@ bot.on('callback_query', async query => {
       return;
     }
 
-    const activationApproveMatch = data.match(/^activation_approve_(\d+)_(\d+)$/);
-    if (activationApproveMatch && isAdmin(userId)) {
-      const merchantId = parseInt(activationApproveMatch[1], 10);
-      const targetUserId = parseInt(activationApproveMatch[2], 10);
-      const merchant = await Merchant.findByPk(merchantId);
-      const request = await ActivationRequest.findOne({ where: { merchantId, userId: targetUserId, status: { [Op.in]: ['pending', 'delayed_offered', 'delayed_accepted'] } }, order: [['id', 'DESC']] });
-      if (merchant && request) {
-        const chargeResult = await chargeActivationRequestOnApproval(request);
-        if (!chargeResult.success) {
-          await bot.sendMessage(targetUserId, await getText(targetUserId, 'activationApprovedChargeFailedUser'), { reply_markup: await getActivationSupportReplyMarkup(targetUserId, merchant) });
-          await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'activationApprovedChargeFailedAdmin') });
-          return;
-        }
-        request.status = 'activated';
-        request.activatedAt = new Date();
-        request.decidedAt = new Date();
-        await request.save();
-        await bot.sendMessage(targetUserId, await getText(targetUserId, 'activationDoneUser', { service: await getMerchantDisplayName(merchant, targetUserId), email: request.email }), { reply_markup: await getActivationSupportReplyMarkup(targetUserId, merchant) });
-        await sendInviteGuideToUser(targetUserId, merchant);
-        await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'activationApprove') });
-      } else {
-        await bot.answerCallbackQuery(query.id, { text: 'Not found' });
-      }
-      return;
-    }
-
-    const activationDelayPickMatch = data.match(/^activation_delaypick_(\d+)_(\d+)$/);
-    if (activationDelayPickMatch && isAdmin(userId)) {
-      const merchantId = parseInt(activationDelayPickMatch[1], 10);
-      const targetUserId = parseInt(activationDelayPickMatch[2], 10);
-      await bot.sendMessage(userId, await getText(userId, 'activationDelayChoose'), {
-        reply_markup: await getActivationDelaySelectionMarkup(merchantId, targetUserId)
-      });
-      await bot.answerCallbackQuery(query.id);
-      return;
-    }
-
-    const activationDelayMatch = data.match(/^activation_delay_(\d+)_(\d+)_(\d+)$/);
-    if (activationDelayMatch && isAdmin(userId)) {
-      const merchantId = parseInt(activationDelayMatch[1], 10);
-      const targetUserId = parseInt(activationDelayMatch[2], 10);
-      const hours = parseInt(activationDelayMatch[3], 10) || 1;
-      const merchant = await Merchant.findByPk(merchantId);
-      const request = await ActivationRequest.findOne({ where: { merchantId, userId: targetUserId, status: { [Op.in]: ['pending', 'delayed_offered', 'delayed_accepted'] } }, order: [['id', 'DESC']] });
-      if (merchant && request) {
-        request.status = 'delayed_offered';
-        request.delayHours = hours;
-        request.delayedUntil = new Date(Date.now() + hours * 60 * 60 * 1000);
-        request.delayReason = 'system_issue';
-        request.decidedAt = new Date();
-        await request.save();
-        await bot.sendMessage(targetUserId, await getText(targetUserId, 'activationDelayedUser', { hours }), {
-          reply_markup: { inline_keyboard: [
-            [{ text: await getText(targetUserId, 'activationAcceptDelay'), callback_data: `activation_delay_accept_${merchantId}_${targetUserId}` }],
-            [{ text: await getText(targetUserId, 'activationDeclineDelay'), callback_data: `activation_delay_decline_${merchantId}_${targetUserId}` }]
-          ] }
-        });
-        await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'activationDelayAppliedAdmin') });
-      } else {
-        await bot.answerCallbackQuery(query.id, { text: 'Not found' });
-      }
-      return;
-    }
-
-    const activationDelayAcceptMatch = data.match(/^activation_delay_accept_(\d+)_(\d+)$/);
-    if (activationDelayAcceptMatch) {
-      const merchantId = parseInt(activationDelayAcceptMatch[1], 10);
-      const targetUserId = parseInt(activationDelayAcceptMatch[2], 10);
-      if (Number(userId) !== targetUserId) {
-        await bot.answerCallbackQuery(query.id);
-        return;
-      }
-      const merchant = await Merchant.findByPk(merchantId);
-      const request = await ActivationRequest.findOne({ where: { merchantId, userId: targetUserId, status: 'delayed_offered' }, order: [['id', 'DESC']] });
-      if (merchant && request) {
-        request.status = 'delayed_accepted';
-        await request.save();
-        await bot.sendMessage(targetUserId, await getText(targetUserId, 'activationDelayAccepted'), { reply_markup: { inline_keyboard: [[{ text: await getText(targetUserId, 'back'), callback_data: 'back_to_menu' }]] } });
-        await bot.sendMessage(ADMIN_ID, await getText(ADMIN_ID, 'activationDelayUserAcceptedAdmin'));
-      }
-      await bot.answerCallbackQuery(query.id);
-      return;
-    }
-
-    const activationDelayDeclineMatch = data.match(/^activation_delay_decline_(\d+)_(\d+)$/);
-    if (activationDelayDeclineMatch) {
-      const merchantId = parseInt(activationDelayDeclineMatch[1], 10);
-      const targetUserId = parseInt(activationDelayDeclineMatch[2], 10);
-      if (Number(userId) !== targetUserId) {
-        await bot.answerCallbackQuery(query.id);
-        return;
-      }
-      const merchant = await Merchant.findByPk(merchantId);
-      const request = await ActivationRequest.findOne({ where: { merchantId, userId: targetUserId, status: 'delayed_offered' }, order: [['id', 'DESC']] });
-      if (merchant && request) {
-        request.status = 'delayed_declined';
-        await request.save();
-        await bot.sendMessage(targetUserId, await getText(targetUserId, 'activationDelayDeclined'), { reply_markup: await getActivationSupportReplyMarkup(targetUserId, merchant) });
-        await bot.sendMessage(ADMIN_ID, await getText(ADMIN_ID, 'activationDelayUserDeclinedAdmin'));
-      }
-      await bot.answerCallbackQuery(query.id);
-      return;
-    }
-
-    const activationRejectMatch = data.match(/^activation_reject_(\d+)_(\d+)$/);
-    if (activationRejectMatch && isAdmin(userId)) {
-      const merchantId = parseInt(activationRejectMatch[1], 10);
-      const targetUserId = parseInt(activationRejectMatch[2], 10);
-      const merchant = await Merchant.findByPk(merchantId);
-      const request = await ActivationRequest.findOne({ where: { merchantId, userId: targetUserId, status: { [Op.in]: ['pending', 'delayed_offered', 'delayed_accepted'] } }, order: [['id', 'DESC']] });
-      if (merchant && request) {
-        request.status = 'not_activated';
-        request.decidedAt = new Date();
-        await request.save();
-        await bot.sendMessage(targetUserId, await getText(targetUserId, 'activationRejectedUser', { service: await getMerchantDisplayName(merchant, targetUserId), email: request.email }), { reply_markup: await getActivationRejectedReplyMarkup(targetUserId, merchant, request.id) });
-        await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'activationReject') });
-      } else {
-        await bot.answerCallbackQuery(query.id, { text: 'Not found' });
-      }
-
-
-    const activationRefundMatch = data.match(/^activation_refund_(\d+)$/);
-    if (activationRefundMatch) {
-      const requestId = parseInt(activationRefundMatch[1], 10);
-      const request = await ActivationRequest.findByPk(requestId);
-      if (!request || Number(request.userId) !== Number(userId)) {
-        await bot.answerCallbackQuery(query.id);
-        return;
-      }
-      if (String(request.notes || '').includes('charged_on_activation') && request.status !== 'refunded') {
-        const amount = Number(request.chargedAmount || 0);
-        const userRow = await User.findByPk(userId);
-        const currentBalance = Number(userRow?.balance || 0);
-        const t = await sequelize.transaction();
-        try {
-          await User.update({ balance: currentBalance + amount }, { where: { id: userId }, transaction: t });
-          await BalanceTransaction.create({ userId, amount, type: 'digital_activation_refund', status: 'completed' }, { transaction: t });
-          request.status = 'refunded';
-          request.notes = [String(request.notes || '').trim(), 'refunded_after_reject'].filter(Boolean).join(' | ');
-          request.decidedAt = new Date();
-          await request.save({ transaction: t });
-          await t.commit();
-        } catch (err) {
-          await t.rollback().catch(() => {});
-          console.error('activation_refund error:', err);
-          await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'error') });
-          return;
-        }
-      }
-      await bot.sendMessage(userId, await getText(userId, 'activationRefundNoCharge'));
-      await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'activationRefundButton') });
-      return;
-    }
-      return;
-    }
-
     if (data.startsWith('support_close_user_') && isAdmin(userId)) {
       const targetUserId = parseInt(data.split('_')[3], 10);
       await closeSupportConversationForUser(targetUserId, 'admin', userId);
@@ -9629,62 +8769,15 @@ bot.on('callback_query', async query => {
       return;
     }
 
-    if (data.startsWith('deposit_pick_')) {
-      const match = data.match(/^deposit_pick_(IQD|USD)_(\d+)$/);
-      if (!match) {
-        await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'error') });
-        return;
-      }
-      await showDepositAmountOptionsForMethod(userId, match[1], parseInt(match[2], 10));
+    if (data === 'deposit_currency_iqd' || data === 'deposit_currency_usd') {
+      await showBinanceAutoAmountOptions(userId);
       await cleanupPressedMessage();
       await bot.answerCallbackQuery(query.id);
       return;
     }
 
-    if (data.startsWith('deposit_amount_')) {
-      const match = data.match(/^deposit_amount_(IQD|USD)_(\d+)_(\d+(?:\.\d+)?)$/);
-      if (!match) {
-        await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'error') });
-        return;
-      }
-      await sendSelectedDepositMethodInstructions(userId, match[1], parseInt(match[2], 10), parseFloat(match[3]));
-      await cleanupPressedMessage();
-      await bot.answerCallbackQuery(query.id);
-      return;
-    }
-
-    if (data === 'deposit_done_send_proof') {
-      const userRecord = await User.findByPk(userId, { attributes: ['state'] });
-      const state = safeParseState(userRecord?.state);
-      if (!state || state.action !== 'deposit_waiting_done') {
-        await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'error') });
-        return;
-      }
-
-      const selected = await getDepositMethodByIndex(state.currency, state.methodIndex);
-      if (!selected?.method) {
-        await clearUserState(userId);
-        await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'error') });
-        return;
-      }
-
-      const methodName = await getDepositMethodNameForUser(userId, state.currency, state.methodIndex);
-      await setUserState(userId, {
-        action: 'deposit_awaiting_proof',
-        currency: state.currency,
-        methodIndex: state.methodIndex,
-        amountUSD: Number(state.amountUSD || 0),
-        createdAt: state.createdAt || Date.now()
-      });
-
-      await bot.sendMessage(userId, await getText(userId, 'depositSendProofNow', { method: methodName }), {
-        reply_markup: await getBackAndCancelReplyMarkup(userId, 'deposit')
-      });
-      await cleanupPressedMessage();
-      await bot.answerCallbackQuery(query.id);
-      return;
-    }
-
+    // -------------------------------------------------------------------
+    // زر الدفع التلقائي عبر Binance
     if (data === 'deposit_binance_auto') {
       await showBinanceAutoAmountOptions(userId);
       await cleanupPressedMessage();
@@ -9718,7 +8811,7 @@ bot.on('callback_query', async query => {
       return;
     }
 
-    if (false && data.startsWith('binance_pay_check_')) {
+    if (data.startsWith('binance_pay_check_')) {
       const merchantTradeNo = String(data.replace('binance_pay_check_', '') || '').trim();
       const result = await syncBinancePayOrderStatus({ merchantTradeNo }, { source: 'bot_callback', notifyUser: true });
       if (!result.success) {
@@ -9745,14 +8838,6 @@ bot.on('callback_query', async query => {
       return;
     }
 
-
-    if ((data === 'admin_manage_bots' || data === 'admin_add_merchant' || data === 'admin_list_merchants' || data === 'admin_set_chatgpt_price' || data === 'admin_manage_channel' || data === 'admin_private_codes_channel' || data === 'admin_import_referral_stock_from_private_channel' || data === 'admin_referral_codes_channel') && isAdmin(userId)) {
-      await bot.sendMessage(userId, await getText(userId, 'featureRemoved'), {
-        reply_markup: { inline_keyboard: [[{ text: await getText(userId, 'back'), callback_data: 'admin' }]] }
-      });
-      await bot.answerCallbackQuery(query.id);
-      return;
-    }
 
     if (data === 'admin_toggle_ai_assistant' && isAdmin(userId)) {
       const enabled = await getAiAssistantEnabled();
@@ -9992,36 +9077,13 @@ bot.on('callback_query', async query => {
       return;
     }
 
-    if (data.startsWith('admin_confirm_delete_deposit_method_') && isAdmin(userId)) {
-      const parts = data.split('_');
-      const currency = parts[5];
-      const index = parseInt(parts[6], 10);
-      const config = await getDepositConfig(currency);
-      const methods = normalizeDepositMethods(config.methods);
-      const method = methods[index];
-      if (!method) {
-        await bot.answerCallbackQuery(query.id);
-        return;
-      }
-      await bot.sendMessage(userId, await getText(userId, 'deleteDepositMethodConfirm'), {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: await getText(userId, 'yes'), callback_data: `admin_delete_deposit_method_${currency}_${index}` }],
-            [{ text: await getText(userId, 'no'), callback_data: `admin_manage_${currency.toLowerCase()}_methods` }]
-          ]
-        }
-      });
-      await bot.answerCallbackQuery(query.id);
-      return;
-    }
-
     if (data.startsWith('admin_delete_deposit_method_') && isAdmin(userId)) {
       const parts = data.split('_');
       const currency = parts[4];
       const index = parseInt(parts[5], 10);
       if (!Number.isNaN(index)) {
         await deleteDepositMethod(currency, index);
-        await bot.sendMessage(userId, await getText(userId, 'deleteDepositMethodDone'));
+        await bot.sendMessage(userId, await getText(userId, 'methodDeleted'));
         await showDepositMethodsAdmin(userId, currency);
       }
       await bot.answerCallbackQuery(query.id);
@@ -10702,88 +9764,11 @@ bot.on('callback_query', async query => {
       return;
     }
 
-    const toggleSectionVisibilityMatch = data.match(/^admin_toggle_digital_section_visibility_(\d+)$/);
-    if (toggleSectionVisibilityMatch && isAdmin(userId)) {
-      const sectionId = parseInt(toggleSectionVisibilityMatch[1], 10);
-      const section = await DigitalSection.findByPk(sectionId);
-      if (section) await setDigitalSectionVisibility(sectionId, !section.isActive);
-      await showDigitalSectionAdmin(userId, sectionId);
-      await bot.answerCallbackQuery(query.id);
-      return;
-    }
-
-    const moveDigitalSectionUpMatch = data.match(/^admin_move_digital_section_up_(\d+)$/);
-    if (moveDigitalSectionUpMatch && isAdmin(userId)) {
-      const sectionId = parseInt(moveDigitalSectionUpMatch[1], 10);
-      await moveDigitalSection(sectionId, 'up');
-      await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'sectionMovedUp') });
-      await showDigitalSectionAdmin(userId, sectionId);
-      return;
-    }
-
-    const moveDigitalSectionDownMatch = data.match(/^admin_move_digital_section_down_(\d+)$/);
-    if (moveDigitalSectionDownMatch && isAdmin(userId)) {
-      const sectionId = parseInt(moveDigitalSectionDownMatch[1], 10);
-      await moveDigitalSection(sectionId, 'down');
-      await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'sectionMovedDown') });
-      await showDigitalSectionAdmin(userId, sectionId);
-      return;
-    }
-
     if (data.startsWith('admin_digital_add_product_') && isAdmin(userId)) {
       const sectionId = parseInt(data.split('_')[4], 10);
       await setUserState(userId, { action: 'add_digital_product', sectionId, step: 'nameEn' });
       await bot.sendMessage(userId, await getText(userId, 'askDigitalProductNameEn'));
       await bot.answerCallbackQuery(query.id);
-      return;
-    }
-
-    const moveProductToMainMatch = data.match(/^admin_move_product_to_main_(\d+)$/);
-    if (moveProductToMainMatch && isAdmin(userId)) {
-      const merchantId = parseInt(moveProductToMainMatch[1], 10);
-      const merchant = await Merchant.findByPk(merchantId);
-      if (merchant) {
-        merchant.category = DIGITAL_MAIN_MENU_CATEGORY;
-        await merchant.save();
-      }
-      await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'digitalProductMovedToMainMenu') });
-      await showDigitalProductAdmin(userId, merchantId);
-      return;
-    }
-
-    const chooseProductTargetMatch = data.match(/^admin_choose_product_target_(\d+)$/);
-    if (chooseProductTargetMatch && isAdmin(userId)) {
-      const merchantId = parseInt(chooseProductTargetMatch[1], 10);
-      const sections = await getAllDigitalSections();
-      const keyboard = [
-        [{ text: await getText(userId, 'moveDigitalProductToMainMenu'), callback_data: `admin_move_product_to_main_${merchantId}` }]
-      ];
-      for (const section of sections) {
-        keyboard.push([{
-          text: `🧩 ${section.nameEn} / ${section.nameAr}`,
-          callback_data: `admin_move_product_to_section_${merchantId}_${section.id}`
-        }]);
-      }
-      keyboard.push([{ text: await getText(userId, 'back'), callback_data: `admin_digital_product_${merchantId}` }]);
-      await bot.sendMessage(userId, await getText(userId, 'chooseDigitalProductTarget'), {
-        reply_markup: { inline_keyboard: keyboard }
-      });
-      await bot.answerCallbackQuery(query.id);
-      return;
-    }
-
-    const moveProductToSectionMatch = data.match(/^admin_move_product_to_section_(\d+)_(\d+)$/);
-    if (moveProductToSectionMatch && isAdmin(userId)) {
-      const merchantId = parseInt(moveProductToSectionMatch[1], 10);
-      const sectionId = parseInt(moveProductToSectionMatch[2], 10);
-      const merchant = await Merchant.findByPk(merchantId);
-      const section = await DigitalSection.findByPk(sectionId);
-      if (merchant && section) {
-        merchant.category = getDigitalSectionCategory(sectionId);
-        await merchant.save();
-      }
-      await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'digitalProductMovedToSection') });
-      await showDigitalProductAdmin(userId, merchantId);
       return;
     }
 
@@ -10794,82 +9779,6 @@ bot.on('callback_query', async query => {
         await clearUserState(userId);
       }
       await showDigitalProductAdmin(userId, merchantId);
-      await bot.answerCallbackQuery(query.id);
-      return;
-    }
-
-    const productSupportMatch = data.match(/^admin_product_support_(\d+)$/);
-    if (productSupportMatch && isAdmin(userId)) {
-      const merchantId = parseInt(productSupportMatch[1], 10);
-      await showDigitalProductSupportAdmin(userId, merchantId);
-      await bot.answerCallbackQuery(query.id);
-      return;
-    }
-
-
-    const toggleProductInviteMatch = data.match(/^admin_toggle_product_invite_(\d+)$/);
-    if (toggleProductInviteMatch && isAdmin(userId)) {
-      const merchantId = parseInt(toggleProductInviteMatch[1], 10);
-      const merchant = await Merchant.findByPk(merchantId);
-      if (merchant) {
-        const meta = getMerchantMetaConfig(merchant);
-        const nextValue = !(meta.inviteMode || meta.requiresEmailActivation);
-        setMerchantMetaConfig(merchant, { inviteMode: nextValue, requiresEmailActivation: nextValue });
-        await merchant.save();
-      }
-      await showDigitalProductAdmin(userId, merchantId);
-      await bot.answerCallbackQuery(query.id);
-      return;
-    }
-
-    const productInviteGuideMatch = data.match(/^admin_product_invite_guide_(\d+)$/);
-    if (productInviteGuideMatch && isAdmin(userId)) {
-      const merchantId = parseInt(productInviteGuideMatch[1], 10);
-      await setUserState(userId, { action: 'set_product_invite_guide', merchantId });
-      await bot.sendMessage(userId, await getText(userId, 'askInviteGuideContent'), {
-        reply_markup: await getBackAndCancelReplyMarkup(userId, `admin_digital_product_${merchantId}`)
-      });
-      await bot.answerCallbackQuery(query.id);
-      return;
-    }
-
-    const setProductTelegramMatch = data.match(/^admin_set_product_telegram_(\d+)$/);
-    if (setProductTelegramMatch && isAdmin(userId)) {
-      const merchantId = parseInt(setProductTelegramMatch[1], 10);
-      await setUserState(userId, { action: 'set_product_support_contact', merchantId, field: 'telegram' });
-      await bot.sendMessage(userId, await getText(userId, 'askProductTelegramSupport'));
-      await bot.answerCallbackQuery(query.id);
-      return;
-    }
-
-    const setProductWhatsappMatch = data.match(/^admin_set_product_whatsapp_(\d+)$/);
-    if (setProductWhatsappMatch && isAdmin(userId)) {
-      const merchantId = parseInt(setProductWhatsappMatch[1], 10);
-      await setUserState(userId, { action: 'set_product_support_contact', merchantId, field: 'whatsapp' });
-      await bot.sendMessage(userId, await getText(userId, 'askProductWhatsappSupport'));
-      await bot.answerCallbackQuery(query.id);
-      return;
-    }
-
-    const setProductExtraMatch = data.match(/^admin_set_product_extra_(\d+)$/);
-    if (setProductExtraMatch && isAdmin(userId)) {
-      const merchantId = parseInt(setProductExtraMatch[1], 10);
-      await setUserState(userId, { action: 'set_product_support_contact', merchantId, field: 'extra' });
-      await bot.sendMessage(userId, await getText(userId, 'askProductExtraSupport'));
-      await bot.answerCallbackQuery(query.id);
-      return;
-    }
-
-    const clearProductExtraMatch = data.match(/^admin_clear_product_extra_(\d+)$/);
-    if (clearProductExtraMatch && isAdmin(userId)) {
-      const merchantId = parseInt(clearProductExtraMatch[1], 10);
-      const merchant = await Merchant.findByPk(merchantId);
-      if (merchant) {
-        setMerchantMetaConfig(merchant, { supportExtraLabel: '', supportExtraUrl: '' });
-        await merchant.save();
-      }
-      await bot.sendMessage(userId, await getText(userId, 'supportSettingsCleared'));
-      await showDigitalProductSupportAdmin(userId, merchantId);
       await bot.answerCallbackQuery(query.id);
       return;
     }
@@ -11091,28 +10000,9 @@ bot.on('callback_query', async query => {
     if (data.startsWith('digital_buy_')) {
       const merchantId = parseInt(data.split('_')[2], 10);
       const merchant = await Merchant.findByPk(merchantId);
-      if (!merchant) {
-        await bot.sendMessage(userId, await getText(userId, 'error'));
-        await cleanupPressedMessage();
-        await bot.answerCallbackQuery(query.id);
-        return;
-      }
-
-      if (await isEmailActivationProduct(merchant)) {
-        await setUserState(userId, { action: 'digital_email_activation_purchase', merchantId });
-        await bot.sendMessage(userId, `${await getText(userId, 'askSubscriptionEmail')}
-${await getText(userId, 'itemPriceLine', { price: formatUsdPrice(merchant.price) })}
-${await getCurrentBalanceLineText(userId)}`, {
-          reply_markup: await getBackAndCancelReplyMarkup(userId, `digital_product_${merchant.id}`)
-        });
-        await cleanupPressedMessage();
-        await bot.answerCallbackQuery(query.id);
-        return;
-      }
-
       const available = await getMerchantAvailableStock(merchantId);
 
-      if (!available) {
+      if (!merchant || !available) {
         await bot.sendMessage(userId, await getText(userId, 'noCodes'));
         await sendMainMenu(userId);
         await cleanupPressedMessage();
@@ -11260,31 +10150,6 @@ bot.on('message', async msg => {
     }
 
     if (state && isAdmin(userId)) {
-      if (state.action === 'awaiting_backup_restore_file') {
-        if (!msg.document) {
-          await bot.sendMessage(userId, await getText(userId, 'restoreBackupNoDocument'), {
-            reply_markup: { inline_keyboard: [[{ text: await getText(userId, 'cancel'), callback_data: 'cancel_action' }],[{ text: await getText(userId, 'back'), callback_data: 'admin' }]] }
-          });
-          return;
-        }
-        try {
-          const link = await bot.getFileLink(msg.document.file_id);
-          const response = await axios.get(link, { responseType: 'text', timeout: 30000 });
-          const payload = JSON.parse(response.data);
-          const restoreResult = await restoreDatabaseBackupPayload(payload);
-          await clearUserState(userId);
-          await bot.sendMessage(userId, await getText(userId, 'restoreBackupDone', restoreResult), {
-            reply_markup: { inline_keyboard: [[{ text: await getText(userId, 'back'), callback_data: 'admin' }]] }
-          });
-        } catch (err) {
-          console.error('restore backup error:', err.message);
-          await bot.sendMessage(userId, await getText(userId, 'restoreBackupInvalid'), {
-            reply_markup: { inline_keyboard: [[{ text: await getText(userId, 'cancel'), callback_data: 'cancel_action' }],[{ text: await getText(userId, 'back'), callback_data: 'admin' }]] }
-          });
-        }
-        return;
-      }
-
       if (state.action === 'set_private_codes_channel') {
         let resolved = null;
         const existingCfg = await getPrivateCodesChannelConfig();
@@ -11454,55 +10319,6 @@ bot.on('message', async msg => {
         await showChannelConfigAdmin(userId);
         return;
       }
-    }
-
-    if (state?.action === 'deposit_waiting_done') {
-      await bot.sendMessage(userId, await getText(userId, 'depositTapDoneFirst'), {
-        reply_markup: {
-          inline_keyboard: [[{ text: await getText(userId, 'donePayment'), callback_data: 'deposit_done_send_proof' }]]
-        }
-      });
-      return;
-    }
-
-    if (state?.action === 'deposit_awaiting_proof') {
-      const selected = await getDepositMethodByIndex(state.currency, state.methodIndex);
-      if (!selected?.method) {
-        await clearUserState(userId);
-        await bot.sendMessage(userId, await getText(userId, 'error'));
-        return;
-      }
-
-      const proofText = String(text || msg.caption || '').trim();
-      const imageFileId = photo ? photo[photo.length - 1].file_id : null;
-      const videoFileId = video ? video.file_id : null;
-      const fileId = imageFileId || videoFileId;
-
-      if (!fileId && !proofText) {
-        await bot.sendMessage(userId, await getText(userId, 'depositProofRequired'), {
-          reply_markup: await getBackAndCancelReplyMarkup(userId, 'deposit')
-        });
-        return;
-      }
-
-      await requestDeposit(
-        userId,
-        Number(state.amountUSD || 0),
-        state.currency === 'IQD' ? 'IQD' : 'USD',
-        proofText || (videoFileId ? 'Video proof' : 'Photo proof'),
-        fileId,
-        msg.from,
-        {
-          methodName: selected.method.nameAr || selected.method.nameEn || '',
-          methodValue: selected.method.value || '',
-          selectedAt: state.createdAt || Date.now()
-        }
-      );
-
-      await clearUserState(userId);
-      await bot.sendMessage(userId, await getText(userId, 'depositProofReceived'));
-      await sendMainMenu(userId);
-      return;
     }
 
     if (state?.action === 'support_reply' && isAdmin(userId)) {
@@ -11803,8 +10619,8 @@ bot.on('message', async msg => {
             nameAr: state.nameAr,
             price: state.price,
             category: getDigitalSectionCategory(state.sectionId),
-            type: state.selectedType || 'single',
-            description: description && typeof description === 'object' ? { ...description, meta: { ...(description.meta || {}), requiresEmailActivation: true } } : { type: 'text', content: '', meta: { requiresEmailActivation: true } }
+            type: state.selectedType || 'bulk',
+            description
           });
 
           await bot.sendMessage(userId, await getText(userId, 'digitalProductCreated', { id: merchant.id }));
@@ -12029,7 +10845,7 @@ bot.on('message', async msg => {
       if (state.action === 'add_payment_method') {
         if (state.step === 'nameEn') {
           await setUserState(userId, { ...state, nameEn: text, step: 'nameAr' });
-          await bot.sendMessage(userId, await getText(userId, 'enterMethodNameAr'));
+          await bot.sendMessage(userId, 'Send name in Arabic:');
           return;
         }
         if (state.step === 'nameAr') {
@@ -12039,26 +10855,26 @@ bot.on('message', async msg => {
         }
         if (state.step === 'details') {
           await setUserState(userId, { ...state, details: text, step: 'type' });
-          await bot.sendMessage(userId, await getText(userId, 'enterMethodTypePrompt'));
+          await bot.sendMessage(userId, 'Send type (manual/auto):');
           return;
         }
         if (state.step === 'type') {
           const type = String(text || '').toLowerCase();
-          if (type !== 'manual') {
-            await bot.sendMessage(userId, await getText(userId, 'enterMethodTypeInvalid'));
+          if (!['manual', 'auto'].includes(type)) {
+            await bot.sendMessage(userId, 'Type must be manual or auto');
             return;
           }
           await PaymentMethod.create({
             nameEn: state.nameEn,
             nameAr: state.nameAr,
             details: state.details,
-            type: 'manual',
+            type,
             config: {},
             isActive: true,
             minDeposit: 1,
             maxDeposit: 10000
           });
-          await bot.sendMessage(userId, await getText(userId, 'methodAdded'));
+          await bot.sendMessage(userId, 'Payment method added successfully.');
           await clearUserState(userId);
           await showAdminPanel(userId);
           return;
@@ -12069,7 +10885,7 @@ bot.on('message', async msg => {
         if (state.step === 'min') {
           const min = parseFloat(text);
           if (Number.isNaN(min)) {
-            await bot.sendMessage(userId, await getText(userId, 'balanceAmountInvalid'));
+            await bot.sendMessage(userId, 'Invalid number');
             return;
           }
           await setUserState(userId, { ...state, min, step: 'max' });
@@ -12079,7 +10895,7 @@ bot.on('message', async msg => {
         if (state.step === 'max') {
           const max = parseFloat(text);
           if (Number.isNaN(max)) {
-            await bot.sendMessage(userId, await getText(userId, 'balanceAmountInvalid'));
+            await bot.sendMessage(userId, 'Invalid number');
             return;
           }
           const method = await PaymentMethod.findByPk(state.methodId);
@@ -12087,9 +10903,9 @@ bot.on('message', async msg => {
             method.minDeposit = state.min;
             method.maxDeposit = max;
             await method.save();
-            await bot.sendMessage(userId, await getText(userId, 'depositLimitsUpdated', { min: state.min, max }));
+            await bot.sendMessage(userId, `Limits set: Min ${state.min} USD, Max ${max} USD.`);
           } else {
-            await bot.sendMessage(userId, await getText(userId, 'methodNotFound'));
+            await bot.sendMessage(userId, 'Method not found');
           }
           await clearUserState(userId);
           await showAdminPanel(userId);
@@ -12879,13 +11695,16 @@ bot.on('message', async msg => {
         return;
       }
 
-      if (providedOrderId) return;
+      if (providedOrderId) {
+        return;
+      }
 
       await bot.sendMessage(userId, await getText(userId, 'binanceTransferHelp'), {
         reply_markup: await getBinanceTransferReplyMarkup(userId)
       });
       return;
     }
+
 
     if (state?.action === 'binance_auto_waiting_proof') {
       await clearUserState(userId);
@@ -12969,96 +11788,6 @@ bot.on('message', async msg => {
         await clearUserState(userId);
       }
       await sendMainMenu(userId);
-      return;
-    }
-
-    if (state?.action === 'set_product_invite_guide' && isAdmin(userId)) {
-      const merchant = await Merchant.findByPk(state.merchantId);
-      if (!merchant) {
-        await bot.sendMessage(userId, await getText(userId, 'error'));
-        await clearUserState(userId);
-        return;
-      }
-      const captionText = String(msg.caption || text || '').trim();
-      if (String(text || '').trim() === '/empty') {
-        setMerchantMetaConfig(merchant, { inviteGuideType: '', inviteGuideText: '', inviteGuideFileId: '', inviteGuideCaption: '' });
-        await merchant.save();
-        await clearUserState(userId);
-        await bot.sendMessage(userId, await getText(userId, 'inviteGuideCleared'));
-        await showDigitalProductAdmin(userId, merchant.id);
-        return;
-      }
-      if (photo && photo.length) {
-        const fileId = photo[photo.length - 1].file_id;
-        setMerchantMetaConfig(merchant, { inviteGuideType: 'photo', inviteGuideText: '', inviteGuideFileId: fileId, inviteGuideCaption: captionText });
-      } else if (video && video.file_id) {
-        setMerchantMetaConfig(merchant, { inviteGuideType: 'video', inviteGuideText: '', inviteGuideFileId: video.file_id, inviteGuideCaption: captionText });
-      } else if (String(text || '').trim()) {
-        setMerchantMetaConfig(merchant, { inviteGuideType: 'text', inviteGuideText: String(text || '').trim(), inviteGuideFileId: '', inviteGuideCaption: '' });
-      } else {
-        await bot.sendMessage(userId, await getText(userId, 'askInviteGuideContent'));
-        return;
-      }
-      await merchant.save();
-      await clearUserState(userId);
-      await bot.sendMessage(userId, await getText(userId, 'inviteGuideUpdated'));
-      await showDigitalProductAdmin(userId, merchant.id);
-      return;
-    }
-
-    if (state?.action === 'set_product_support_contact' && isAdmin(userId)) {
-      const merchant = await Merchant.findByPk(state.merchantId);
-      if (!merchant) {
-        await bot.sendMessage(userId, await getText(userId, 'error'));
-        await clearUserState(userId);
-        return;
-      }
-      const trimmed = String(text || '').trim();
-      if (!trimmed) return;
-      if (state.field === 'telegram') {
-        setMerchantMetaConfig(merchant, { supportTelegram: normalizeTelegramUrl(trimmed) });
-      } else if (state.field === 'whatsapp') {
-        setMerchantMetaConfig(merchant, { supportWhatsapp: normalizeWhatsappUrl(trimmed) });
-      } else if (state.field === 'extra') {
-        const parts = trimmed.split('|').map(v => v.trim());
-        if (parts.length < 2 || !parts[0] || !parts[1]) {
-          await bot.sendMessage(userId, await getText(userId, 'askProductExtraSupport'));
-          return;
-        }
-        setMerchantMetaConfig(merchant, { supportExtraLabel: parts[0], supportExtraUrl: parts.slice(1).join(' | ') });
-      }
-      await merchant.save();
-      await clearUserState(userId);
-      await bot.sendMessage(userId, await getText(userId, 'supportSettingsUpdated'));
-      await showDigitalProductSupportAdmin(userId, merchant.id);
-      return;
-    }
-
-    if (state?.action === 'digital_email_activation_purchase') {
-      const merchant = await Merchant.findByPk(state.merchantId);
-      const email = String(text || '').trim();
-      if (!merchant) {
-        await bot.sendMessage(userId, await getText(userId, 'error'));
-        await clearUserState(userId);
-        return;
-      }
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        await bot.sendMessage(userId, await getText(userId, 'invalidEmail'));
-        return;
-      }
-      const amount = parseFloat(merchant.price || 0) || 0;
-      const balance = await getUserBalanceValue(userId);
-      if (balance < amount) {
-        await bot.sendMessage(userId, await getText(userId, 'insufficientBalance', { balance: balance.toFixed(2), price: amount.toFixed(2), needed: amount.toFixed(2) }), { reply_markup: { inline_keyboard: [[{ text: await getText(userId, 'depositNow'), callback_data: 'deposit' }]] } });
-        return;
-      }
-      const requestRecord = await createActivationRequestRecord(userId, merchant, email, amount, null);
-      const adminNotice = await sendActivationRequestToAdmin(userId, merchant, email, amount, requestRecord);
-      const sentUserActivation = await bot.sendMessage(userId, await getText(userId, 'activationProcessingSoon', { service: await getMerchantDisplayName(merchant, userId), email, amount: formatUsdPrice(amount), time: adminNotice.timestamp }), { reply_markup: { inline_keyboard: [[{ text: await getText(userId, 'back'), callback_data: 'back_to_menu' }]] } });
-      if (sentUserActivation?.message_id) {
-        await safePinChatMessage(userId, sentUserActivation.message_id);
-      }
-      await clearUserState(userId);
       return;
     }
 
@@ -13220,20 +11949,25 @@ bot.on('message', async msg => {
     }
 
     if (state?.action === 'deposit_amount') {
+      const amount = parseFloat(text);
+      if (Number.isNaN(amount) || amount <= 0) {
+        await bot.sendMessage(userId, await getText(userId, 'enterDepositAmount'), {
+          reply_markup: await getBackAndCancelReplyMarkup(userId, 'deposit')
+        });
+        return;
+      }
+      await sendBinanceAutoInstructions(userId, amount);
+      return;
+    }
+
+    if (state?.action === 'deposit_awaiting_proof' || state?.action === 'binance_auto_session' || state?.action === 'binance_auto_waiting_proof') {
       await clearUserState(userId);
-      await showCurrencyOptions(userId);
+      await bot.sendMessage(userId, await getText(userId, 'binancePayStatusExpired'));
+      await showBinanceAutoAmountOptions(userId);
       return;
     }
 
     if (state?.action === 'binance_pay_pending_order') {
-      await clearUserState(userId);
-      await bot.sendMessage(userId, await getText(userId, 'binanceRemoved'), {
-        reply_markup: await getBackAndCancelReplyMarkup(userId, 'deposit')
-      });
-      return;
-    }
-
-    if (false && state?.action === 'binance_pay_pending_order') {
       const normalized = normalizeAssistantText(String(text || ''));
       const shouldCheck = !normalized || /(check|status|paid|done|تحقق|تحقق من الدفع|تم الدفع|دفعت|اكتمل|حاله الدفع|حالة الدفع)/i.test(normalized);
       if (shouldCheck) {
@@ -13560,6 +12294,15 @@ bot.on('message', async msg => {
       return;
     }
 
+    if ((!state?.action || state?.action !== 'binance_transfer_pending') && /^\/claim(?:@\w+)?(?:\s+.*)?$/i.test(String(text || '').trim())) {
+      await bot.sendMessage(userId, await getText(userId, 'binanceTransferNoPending'));
+      return;
+    }
+
+    if ((!state?.action || state?.action !== 'binance_transfer_pending') && looksLikeBinanceTransferOrderId(String(text || '').trim())) {
+      return;
+    }
+
     if (!state?.action && msg.chat?.type === 'private' && typeof text === 'string' && String(text).trim() && !isSlashCommandText(text) && (await getAiAssistantEnabled())) {
       await processAssistantMessageTurn(userId, String(text).trim(), {
         action: 'ai_assistant',
@@ -13767,11 +12510,20 @@ setInterval(async () => {
   }
 }, BINANCE_PAY_PENDING_POLL_INTERVAL_MS);
 
+setInterval(async () => {
+  try {
+    await reconcilePendingBinanceTransferOrders();
+  } catch (err) {
+    console.error('Binance transfer pending reconciliation error:', err.message);
+  }
+}, BINANCE_TRANSFER_PENDING_POLL_INTERVAL_MS);
+
 sequelize.sync({ alter: true }).then(async () => {
   console.log('✅ Database synced');
   await getDepositConfig('USD');
   await getDepositConfig('IQD');
   await getOrCreateBinancePayPaymentMethod();
+  await getOrCreateBinanceTransferPaymentMethod();
   await getChannelConfig();
   await refreshChatGPTCookies(false);
 
@@ -13779,7 +12531,6 @@ sequelize.sync({ alter: true }).then(async () => {
   await getPrivateCodesChannelConfig();
   await getReferralCodesChannelConfig();
   await getBotUsername();
-  startAutomaticBackupScheduler();
 
   const PORT = process.env.PORT || 3000;
   app.get('/', (req, res) => res.send('Bot is running'));
