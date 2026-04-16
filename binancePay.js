@@ -1,147 +1,49 @@
-const crypto = require('crypto');
 const axios = require('axios');
 
-class BinancePay {
-  constructor({
-    apiKey,
-    apiSecret,
-    baseUrl = 'https://bpay.binanceapi.com',
-    timeout = 20000
-  }) {
-    if (!apiKey) throw new Error('apiKey is required');
-    if (!apiSecret) throw new Error('apiSecret is required');
+const PROXY_URL = "https://ok-bainac.onrender.com/verify-binance"; 
+const PROXY_SECRET = "123456789_my_secret_password";
 
-    this.apiKey = String(apiKey).trim();
-    this.apiSecret = String(apiSecret).trim();
-    this.baseUrl = String(baseUrl || 'https://bpay.binanceapi.com').replace(/\/+$/, '');
-    this.timeout = timeout;
-  }
+function generateDepositNote(prefix = 'TOOLS-') {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let suffix = '';
+  for (let i = 0; i < 6; i++) suffix += chars[Math.floor(Math.random() * chars.length)];
+  return `TOOLS-${suffix}`;
+}
 
-  getTimestamp() {
-    return Date.now();
-  }
+function normalizeOrderId(v) { return String(v || '').trim(); }
+function normalizeNote(v) { return String(v || '').trim(); }
+function looksLikeOrderId(v) { return /^\d{11,}$/.test(String(v || '').trim()); }
+function normalizeAmount(v) { return Number(v); }
+function getTransactionOrderId(tx) { return String(tx?.orderId || ''); }
+function getTransactionNote(tx) { return String(tx?.note || ''); }
+function getTransactionAmount(tx) { return parseFloat(tx?.amount || 0); }
+function getTransactionTime(tx) { return Number(tx?.transactionTime || 0); }
 
-  generateNonce(length = 32) {
-    return crypto.randomBytes(length).toString('hex').slice(0, length);
-  }
+async function verifyBinanceTransfer(params) {
+  console.log("🚀 جاري إرسال الطلب والمفاتيح إلى الوسيط Render...");
+  
+  // 🔥 هذا هو الحل: سحب المفاتيح من ريلوي وإضافتها للطلب لكي لا تصل فارغة
+  const payload = {
+    ...params,
+    apiKey: process.env.BINANCE_PAY_API_KEY || process.env.BINANCE_API_KEY,
+    apiSecret: process.env.BINANCE_PAY_SECRET_KEY || process.env.BINANCE_SECRET_KEY
+  };
 
-  signPayload(timestamp, nonce, payload = {}) {
-    const payloadString = JSON.stringify(payload || {});
-    const payloadToSign = `${timestamp}\n${nonce}\n${payloadString}\n`;
-
-    return crypto
-      .createHmac('sha512', this.apiSecret)
-      .update(payloadToSign, 'utf8')
-      .digest('hex')
-      .toUpperCase();
-  }
-
-  async request(method, path, payload = {}) {
-    const timestamp = this.getTimestamp();
-    const nonce = this.generateNonce();
-    const signature = this.signPayload(timestamp, nonce, payload);
-
-    const response = await axios({
-      method,
-      url: `${this.baseUrl}${path}`,
-      data: payload,
-      timeout: this.timeout,
-      headers: {
-        'Content-Type': 'application/json;charset=utf-8',
-        'BinancePay-Timestamp': String(timestamp),
-        'BinancePay-Nonce': nonce,
-        'BinancePay-Certificate-SN': this.apiKey,
-        'BinancePay-Signature': signature,
-        'User-Agent': 'custom-binance-pay-node'
-      },
-      validateStatus: () => true
+  try {
+    const response = await axios.post(PROXY_URL, payload, {
+      headers: { 'x-proxy-secret': PROXY_SECRET },
+      timeout: 25000
     });
-
+    console.log("✅ رد الوسيط:", JSON.stringify(response.data));
     return response.data;
-  }
-
-  async createOrder(params) {
-    return this.request('POST', '/binancepay/openapi/v2/order', params);
-  }
-
-  async queryOrder({ prepayId, merchantTradeNo }) {
-    if (!prepayId && !merchantTradeNo) {
-      throw new Error('Either prepayId or merchantTradeNo is required');
-    }
-
-    return this.request('POST', '/binancepay/openapi/v2/order/query', {
-      ...(prepayId ? { prepayId } : {}),
-      ...(merchantTradeNo ? { merchantTradeNo } : {})
-    });
-  }
-
-  async closeOrder({ prepayId, merchantTradeNo }) {
-    if (!prepayId && !merchantTradeNo) {
-      throw new Error('Either prepayId or merchantTradeNo is required');
-    }
-
-    return this.request('POST', '/binancepay/openapi/order/close', {
-      ...(prepayId ? { prepayId } : {}),
-      ...(merchantTradeNo ? { merchantTradeNo } : {})
-    });
-  }
-
-  async refundOrder({ refundRequestId, prepayId, refundAmount, refundReason }) {
-    if (!refundRequestId) throw new Error('refundRequestId is required');
-    if (!prepayId) throw new Error('prepayId is required');
-    if (refundAmount === undefined || refundAmount === null) {
-      throw new Error('refundAmount is required');
-    }
-
-    return this.request('POST', '/binancepay/openapi/order/refund', {
-      refundRequestId,
-      prepayId,
-      refundAmount,
-      ...(refundReason ? { refundReason } : {})
-    });
-  }
-
-  buildCreateOrderPayload({
-    merchantTradeNo,
-    amount,
-    currency = 'USDT',
-    goodsName,
-    goodsDetail = '',
-    terminalType = 'WAP',
-    returnUrl,
-    cancelUrl,
-    webhookUrl,
-    orderExpireTime,
-    supportPayCurrency,
-    passThroughInfo
-  }) {
-    if (!merchantTradeNo) throw new Error('merchantTradeNo is required');
-    if (amount === undefined || amount === null) throw new Error('amount is required');
-    if (!goodsName) throw new Error('goodsName is required');
-
-    const payload = {
-      env: { terminalType },
-      merchantTradeNo,
-      orderAmount: Number(amount),
-      currency,
-      goods: {
-        goodsType: '02',
-        goodsCategory: 'Z000',
-        referenceGoodsId: merchantTradeNo,
-        goodsName,
-        goodsDetail
-      }
-    };
-
-    if (returnUrl) payload.returnUrl = returnUrl;
-    if (cancelUrl) payload.cancelUrl = cancelUrl;
-    if (webhookUrl) payload.webhookUrl = webhookUrl;
-    if (orderExpireTime) payload.orderExpireTime = orderExpireTime;
-    if (supportPayCurrency) payload.supportPayCurrency = supportPayCurrency;
-    if (passThroughInfo) payload.passThroughInfo = passThroughInfo;
-
-    return payload;
+  } catch (error) {
+    console.log("❌ خطأ في الاتصال:", error.message);
+    return { success: false, reason: 'api_error' };
   }
 }
 
-module.exports = BinancePay;
+module.exports = {
+  generateDepositNote, normalizeOrderId, normalizeNote, looksLikeOrderId,
+  normalizeAmount, verifyBinanceTransfer, getTransactionOrderId,
+  getTransactionNote, getTransactionAmount, getTransactionTime
+};
