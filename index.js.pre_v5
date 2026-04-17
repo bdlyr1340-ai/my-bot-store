@@ -1138,8 +1138,7 @@ Object.assign(DEFAULT_TEXTS.en, {
   activationAdminNotice: '📩 New activation request\n\nService: {service}\nUser: {name}\nUsername: {username}\nUser ID: {userId}\nEmail: {email}\nAmount: {amount} USD',
   activationAdminSourceStock: '📦 Source: Stock',
   activationAdminSourceInvite: '🎟 Source: Invitation',
-  activationAdminRejectWrongEmail: '📧 Email is wrong!',
-  activationAdminComplete: '✅ Activated',
+  activationAdminRejectWrongEmail: '❌ Wrong email',
   activationAdminDelay: '⏰ Delay',
   activationAdminDelayPrompt: 'Send the delay time now. Examples:\n30 = 30 minutes\n1 = 1 hour\n2 = 2 hours\n0.5 = half an hour',
   activationAdminDelaySaved: '✅ Delay saved for {duration}. The user has been notified.',
@@ -1153,9 +1152,8 @@ Object.assign(DEFAULT_TEXTS.en, {
   activationDelayUserNotice: '⏰ Your activation has been delayed for {duration}. Please choose one of the options below.',
   activationDelayAcceptButton: '✅ I accept the delay',
   activationDelayCancelRefundButton: '💸 Cancel the delay and refund',
+  activationDelayEmailWrongButton: '📧 Email is wrong!',
   activationDelayAcceptedUser: '✅ You accepted the delay. Activation will continue after {duration}.',
-  activationCompletedUser: '✅ This email has been activated successfully.\nService: {service}\nEmail: {email}',
-  activationCompletedAdmin: '✅ Activation request #{requestId} was marked as completed.',
   activationRefundedUser: '💰 The amount has been refunded to your balance. New balance: {balance} USD',
   activationRefundedAdmin: '💸 Activation request #{requestId} was canceled by the user and refunded.',
   activationDelayNotifyUserPrompt: 'You can now send the correct email using the button below.',
@@ -1208,8 +1206,7 @@ Object.assign(DEFAULT_TEXTS.ar, {
   activationAdminNotice: '📩 طلب تفعيل جديد\n\nالخدمة: {service}\nالاسم: {name}\nالمعرف: {username}\nايدي المستخدم: {userId}\nالإيميل: {email}\nالمبلغ: {amount} دولار',
   activationAdminSourceStock: '📦 المصدر: مخزون',
   activationAdminSourceInvite: '🎟 المصدر: دعوة',
-  activationAdminRejectWrongEmail: '📧 الايميل خطأ!',
-  activationAdminComplete: '✅ تم التفعيل',
+  activationAdminRejectWrongEmail: '❌ رفض - الإيميل خطأ',
   activationAdminDelay: '⏰ تأجيل',
   activationAdminDelayPrompt: 'أرسل مدة التأجيل الآن. أمثلة:\n30 = نصف ساعة\n1 = ساعة\n2 = ساعتان\n0.5 = نصف ساعة',
   activationAdminDelaySaved: '✅ تم حفظ التأجيل لمدة {duration} وتم إشعار المستخدم.',
@@ -1223,9 +1220,8 @@ Object.assign(DEFAULT_TEXTS.ar, {
   activationDelayUserNotice: '⏰ تم تأجيل التفعيل لمدة {duration}. اختر أحد الخيارات بالأسفل.',
   activationDelayAcceptButton: '✅ قبلت التأجيل',
   activationDelayCancelRefundButton: '💸 الغاء التأجيل واسترداد الاموال',
+  activationDelayEmailWrongButton: '📧 الايميل خطأ!',
   activationDelayAcceptedUser: '✅ تم تسجيل قبولك للتأجيل. سيستمر التفعيل بعد {duration}.',
-  activationCompletedUser: '✅ تم تفعيل هذا الإيميل بنجاح.\nالخدمة: {service}\nالإيميل: {email}',
-  activationCompletedAdmin: '✅ تم وضع طلب التفعيل رقم #{requestId} كمكتمل.',
   activationRefundedUser: '💰 تم استرداد المبلغ إلى رصيدك. رصيدك الجديد: {balance} دولار',
   activationRefundedAdmin: '💸 تم إلغاء طلب التفعيل رقم #{requestId} من قبل المستخدم وتم استرداد المبلغ.',
   activationDelayNotifyUserPrompt: 'يمكنك الآن إرسال الإيميل الصحيح عبر الزر أدناه.',
@@ -2394,11 +2390,10 @@ async function getActivationRequestServiceName(request, viewerUserId) {
 
 async function getActivationAdminReplyMarkup(requestId) {
   return {
-    inline_keyboard: [
-      [{ text: await getText(ADMIN_ID, 'activationAdminComplete'), callback_data: `admin_activation_complete_${requestId}` }],
-      [{ text: await getText(ADMIN_ID, 'activationAdminDelay'), callback_data: `admin_activation_delay_${requestId}` }],
-      [{ text: await getText(ADMIN_ID, 'activationAdminRejectWrongEmail'), callback_data: `admin_activation_email_wrong_${requestId}` }]
-    ]
+    inline_keyboard: [[
+      { text: await getText(ADMIN_ID, 'activationAdminRejectWrongEmail'), callback_data: `admin_activation_email_wrong_${requestId}` },
+      { text: await getText(ADMIN_ID, 'activationAdminDelay'), callback_data: `admin_activation_delay_${requestId}` }
+    ]]
   };
 }
 
@@ -2454,7 +2449,8 @@ async function sendActivationDelayOptionsToUser(request) {
     reply_markup: {
       inline_keyboard: [
         [{ text: await getText(request.userId, 'activationDelayAcceptButton'), callback_data: `activation_delay_accept_${request.id}` }],
-        [{ text: await getText(request.userId, 'activationDelayCancelRefundButton'), callback_data: `activation_delay_refund_${request.id}` }]
+        [{ text: await getText(request.userId, 'activationDelayCancelRefundButton'), callback_data: `activation_delay_refund_${request.id}` }],
+        [{ text: await getText(request.userId, 'activationDelayEmailWrongButton'), callback_data: `activation_delay_email_wrong_${request.id}` }]
       ]
     }
   }).catch(() => null);
@@ -8756,11 +8752,6 @@ bot.onText(/\/start(?:\s+(.+))?/, async (msg, match) => {
       return;
     }
 
-    const canUse = await ensureUserAccess(userId, { sendJoinPrompt: true, sendCaptchaPrompt: true });
-    if (!canUse) {
-      return;
-    }
-
     await sendMainMenu(userId);
   } catch (err) {
     console.error('Error in /start:', err);
@@ -10571,25 +10562,6 @@ bot.on('callback_query', async query => {
     }
 
 
-    const adminActivationCompleteMatch = data.match(/^admin_activation_complete_(\d+)$/);
-    if (adminActivationCompleteMatch && isAdmin(userId)) {
-      const request = await ActivationRequest.findByPk(parseInt(adminActivationCompleteMatch[1], 10));
-      if (!request || isActivationRequestClosed(request)) {
-        await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'activationRequestClosed'), show_alert: true });
-        return;
-      }
-      request.status = 'completed';
-      request.delayMinutes = null;
-      request.delayUntil = null;
-      await request.save();
-      await bot.sendMessage(request.userId, await getText(request.userId, 'activationCompletedUser', {
-        service: await getActivationRequestServiceName(request, request.userId),
-        email: request.email
-      })).catch(() => null);
-      await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'activationCompletedAdmin', { requestId: request.id }) });
-      return;
-    }
-
     const adminActivationWrongEmailMatch = data.match(/^admin_activation_email_wrong_(\d+)$/);
     if (adminActivationWrongEmailMatch && isAdmin(userId)) {
       const request = await ActivationRequest.findByPk(parseInt(adminActivationWrongEmailMatch[1], 10));
@@ -10846,11 +10818,6 @@ bot.on('message', async msg => {
       if (!referralCfg.chatId || String(msg.forward_from_chat.id) === String(referralCfg.chatId)) {
         await cacheReferralCodesChannelPostMessage(forwardedPayload);
       }
-    }
-
-    const trimmedIncomingText = typeof text === 'string' ? String(text).trim() : '';
-    if (/^\/start(?:\s|$)/i.test(trimmedIncomingText)) {
-      return;
     }
 
     const verificationRequired = await isVerificationRequiredForUser(userId);
