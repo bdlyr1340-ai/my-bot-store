@@ -262,6 +262,27 @@ const PrivateChannelCodePostCache = sequelize.define('PrivateChannelCodePostCach
   indexes: [{ unique: true, fields: ['channelChatId', 'messageId'] }]
 });
 
+
+const ActivationRequest = sequelize.define('ActivationRequest', {
+  id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
+  userId: { type: DataTypes.BIGINT, allowNull: false },
+  merchantId: { type: DataTypes.INTEGER, allowNull: true },
+  email: { type: DataTypes.STRING, allowNull: false },
+  amount: { type: DataTypes.DECIMAL(10, 2), allowNull: false, defaultValue: 0 },
+  source: { type: DataTypes.STRING, allowNull: false, defaultValue: 'invite' },
+  status: { type: DataTypes.STRING, allowNull: false, defaultValue: 'pending' },
+  delayMinutes: { type: DataTypes.INTEGER, allowNull: true },
+  delayUntil: { type: DataTypes.DATE, allowNull: true },
+  adminMessageId: { type: DataTypes.BIGINT, allowNull: true },
+  meta: { type: DataTypes.JSONB, defaultValue: {} }
+}, {
+  indexes: [
+    { fields: ['status'] },
+    { fields: ['userId'] },
+    { fields: ['delayUntil'] }
+  ]
+});
+
 Merchant.hasMany(Code, { foreignKey: 'merchantId' });
 Code.belongsTo(Merchant);
 BalanceTransaction.belongsTo(User, { foreignKey: 'userId' });
@@ -1117,6 +1138,27 @@ Object.assign(DEFAULT_TEXTS.en, {
   activationAdminNotice: '📩 New activation request\n\nService: {service}\nUser: {name}\nUsername: {username}\nUser ID: {userId}\nEmail: {email}\nAmount: {amount} USD',
   activationAdminSourceStock: '📦 Source: Stock',
   activationAdminSourceInvite: '🎟 Source: Invitation',
+  activationAdminRejectWrongEmail: '❌ Wrong email',
+  activationAdminDelay: '⏰ Delay',
+  activationAdminDelayPrompt: 'Send the delay time now. Examples:\n30 = 30 minutes\n1 = 1 hour\n2 = 2 hours\n0.5 = half an hour',
+  activationAdminDelaySaved: '✅ Delay saved for {duration}. The user has been notified.',
+  activationAdminDelayReminderPrefix: '⏰ Delay time ended. Resending the activation request.',
+  activationAdminWrongEmailForwarded: '✅ The wrong-email notice was sent to the user.',
+  activationWrongEmailUser: '❌ There is an issue with this email. Please send another email.',
+  activationWrongEmailUserWithButton: '❌ There is an issue with this email. Please send another email using the button below.',
+  activationSendEmailButton: '📧 Send email',
+  activationEmailUpdatedUser: '✅ Your email has been updated and sent to the admin again.',
+  activationEmailUpdatedAdminPrefix: '🔁 User sent a new email for this request.',
+  activationDelayUserNotice: '⏰ Your activation has been delayed for {duration}. Please choose one of the options below.',
+  activationDelayAcceptButton: '✅ I accept the delay',
+  activationDelayCancelRefundButton: '💸 Cancel the delay and refund',
+  activationDelayEmailWrongButton: '📧 Email is wrong!',
+  activationDelayAcceptedUser: '✅ You accepted the delay. Activation will continue after {duration}.',
+  activationRefundedUser: '💰 The amount has been refunded to your balance. New balance: {balance} USD',
+  activationRefundedAdmin: '💸 Activation request #{requestId} was canceled by the user and refunded.',
+  activationDelayNotifyUserPrompt: 'You can now send the correct email using the button below.',
+  activationInvalidDelayValue: '❌ Invalid delay value. Send 30 for 30 minutes, 1 for one hour, 2 for two hours, or 0.5 for half an hour.',
+  activationRequestClosed: '❌ This activation request is no longer available.',
   dailyGiftClaimed: '🎁 Daily gift claimed successfully.\nAmount: {amount} USD\nNew balance: {balance} USD',
   dailyGiftAlreadyClaimed: '⏳ You already claimed your daily gift today.\nCome back after: {timeLeft}',
   dailyGiftButtonHint: 'Claim your daily bonus',
@@ -1164,6 +1206,27 @@ Object.assign(DEFAULT_TEXTS.ar, {
   activationAdminNotice: '📩 طلب تفعيل جديد\n\nالخدمة: {service}\nالاسم: {name}\nالمعرف: {username}\nايدي المستخدم: {userId}\nالإيميل: {email}\nالمبلغ: {amount} دولار',
   activationAdminSourceStock: '📦 المصدر: مخزون',
   activationAdminSourceInvite: '🎟 المصدر: دعوة',
+  activationAdminRejectWrongEmail: '❌ رفض - الإيميل خطأ',
+  activationAdminDelay: '⏰ تأجيل',
+  activationAdminDelayPrompt: 'أرسل مدة التأجيل الآن. أمثلة:\n30 = نصف ساعة\n1 = ساعة\n2 = ساعتان\n0.5 = نصف ساعة',
+  activationAdminDelaySaved: '✅ تم حفظ التأجيل لمدة {duration} وتم إشعار المستخدم.',
+  activationAdminDelayReminderPrefix: '⏰ انتهت مدة التأجيل. تمت إعادة إرسال طلب التفعيل.',
+  activationAdminWrongEmailForwarded: '✅ تم إرسال إشعار خطأ الإيميل إلى المستخدم.',
+  activationWrongEmailUser: '❌ يوجد خطأ في هذا الإيميل. يرجى إرسال إيميل آخر.',
+  activationWrongEmailUserWithButton: '❌ يوجد خطأ في هذا الإيميل. يرجى إرسال إيميل آخر عبر الزر أدناه.',
+  activationSendEmailButton: '📧 إرسال إيميل',
+  activationEmailUpdatedUser: '✅ تم تحديث الإيميل وإرساله إلى الأدمن مرة أخرى.',
+  activationEmailUpdatedAdminPrefix: '🔁 قام المستخدم بإرسال إيميل جديد لهذا الطلب.',
+  activationDelayUserNotice: '⏰ تم تأجيل التفعيل لمدة {duration}. اختر أحد الخيارات بالأسفل.',
+  activationDelayAcceptButton: '✅ قبلت التأجيل',
+  activationDelayCancelRefundButton: '💸 الغاء التأجيل واسترداد الاموال',
+  activationDelayEmailWrongButton: '📧 الايميل خطأ!',
+  activationDelayAcceptedUser: '✅ تم تسجيل قبولك للتأجيل. سيستمر التفعيل بعد {duration}.',
+  activationRefundedUser: '💰 تم استرداد المبلغ إلى رصيدك. رصيدك الجديد: {balance} دولار',
+  activationRefundedAdmin: '💸 تم إلغاء طلب التفعيل رقم #{requestId} من قبل المستخدم وتم استرداد المبلغ.',
+  activationDelayNotifyUserPrompt: 'يمكنك الآن إرسال الإيميل الصحيح عبر الزر أدناه.',
+  activationInvalidDelayValue: '❌ مدة التأجيل غير صحيحة. أرسل 30 لنصف ساعة أو 1 لساعة أو 2 لساعتين أو 0.5 لنصف ساعة.',
+  activationRequestClosed: '❌ طلب التفعيل هذا لم يعد متاحاً.',
   dailyGiftClaimed: '🎁 تم استلام الهدية اليومية بنجاح.\nالقيمة: {amount} دولار\nرصيدك الجديد: {balance} دولار',
   dailyGiftAlreadyClaimed: '⏳ لقد استلمت الهدية اليومية اليوم بالفعل.\nعد بعد: {timeLeft}',
   dailyGiftButtonHint: 'استلم مكافأتك اليومية',
@@ -2254,6 +2317,189 @@ function formatUsdPrice(value) {
   const numeric = parseFloat(value);
   if (!Number.isFinite(numeric)) return '0';
   return Number.isInteger(numeric) ? String(numeric) : numeric.toFixed(2).replace(/\.00$/, '');
+}
+
+
+function parseActivationDelayMinutes(input) {
+  const raw = String(input || '').trim().toLowerCase();
+  if (!raw) return null;
+  if (/half|نصف/.test(raw)) return 30;
+
+  const normalized = raw.replace(/,/g, '.');
+  const match = normalized.match(/(\d+(?:\.\d+)?)/);
+  if (!match) return null;
+
+  const value = parseFloat(match[1]);
+  if (!Number.isFinite(value) || value <= 0) return null;
+
+  if (/ساعة|ساعات|hour|hours|hr|hrs/.test(normalized)) return Math.round(value * 60);
+  if (/دقيقة|دقائق|minute|minutes|min|mins/.test(normalized)) return Math.round(value);
+  if (value === 0.5) return 30;
+  if (value <= 12) return Math.round(value * 60);
+  return Math.round(value);
+}
+
+function formatActivationDelayDuration(minutes, lang = 'en') {
+  const totalMinutes = Math.max(1, parseInt(minutes, 10) || 0);
+  if (lang === 'ar') {
+    if (totalMinutes === 30) return 'نصف ساعة';
+    if (totalMinutes % 60 === 0) {
+      const hours = totalMinutes / 60;
+      if (hours === 1) return 'ساعة';
+      if (hours === 2) return 'ساعتين';
+      if (hours <= 10) return `${hours} ساعات`;
+      return `${hours} ساعة`;
+    }
+    return `${totalMinutes} دقيقة`;
+  }
+
+  if (totalMinutes === 30) return 'half an hour';
+  if (totalMinutes % 60 === 0) {
+    const hours = totalMinutes / 60;
+    return hours === 1 ? '1 hour' : `${hours} hours`;
+  }
+  return totalMinutes === 1 ? '1 minute' : `${totalMinutes} minutes`;
+}
+
+async function getUserLangCode(userId) {
+  const user = await User.findByPk(userId, { attributes: ['lang'] });
+  return user?.lang || 'en';
+}
+
+async function formatActivationDelayDurationForUser(userId, minutes) {
+  return formatActivationDelayDuration(minutes, await getUserLangCode(userId));
+}
+
+function getActivationRequestMeta(request) {
+  return request?.meta && typeof request.meta === 'object' ? { ...request.meta } : {};
+}
+
+function isActivationRequestClosed(request) {
+  return !request || ['refunded', 'completed', 'cancelled'].includes(String(request.status || '').toLowerCase());
+}
+
+async function getActivationRequestServiceName(request, viewerUserId) {
+  const merchant = request?.merchantId ? await Merchant.findByPk(request.merchantId) : null;
+  if (merchant) return await getMerchantDisplayName(merchant, viewerUserId);
+  const meta = getActivationRequestMeta(request);
+  const lang = await getUserLangCode(viewerUserId);
+  return lang === 'ar'
+    ? (meta.serviceNameAr || meta.serviceNameEn || '-')
+    : (meta.serviceNameEn || meta.serviceNameAr || '-');
+}
+
+async function getActivationAdminReplyMarkup(requestId) {
+  return {
+    inline_keyboard: [[
+      { text: await getText(ADMIN_ID, 'activationAdminRejectWrongEmail'), callback_data: `admin_activation_email_wrong_${requestId}` },
+      { text: await getText(ADMIN_ID, 'activationAdminDelay'), callback_data: `admin_activation_delay_${requestId}` }
+    ]]
+  };
+}
+
+async function sendActivationRequestToAdmin(request, options = {}) {
+  if (!request) return null;
+  const meta = getActivationRequestMeta(request);
+  const prefix = options.prefix ? `${options.prefix}
+
+` : '';
+  const sourceKey = String(request.source || '').toLowerCase() === 'invite'
+    ? 'activationAdminSourceInvite'
+    : 'activationAdminSourceStock';
+  const serviceName = await getActivationRequestServiceName(request, ADMIN_ID);
+  const fullName = [meta.firstName || '', meta.lastName || ''].join(' ').trim() || '-';
+  const username = meta.username ? `@${String(meta.username).replace(/^@/, '')}` : '-';
+  const message = `${prefix}${await getText(ADMIN_ID, 'activationAdminNotice', {
+    service: serviceName,
+    name: fullName,
+    username,
+    userId: request.userId,
+    email: request.email,
+    amount: formatUsdPrice(request.amount)
+  })}
+${await getText(ADMIN_ID, sourceKey)}`;
+  const sent = await bot.sendMessage(ADMIN_ID, message, {
+    reply_markup: await getActivationAdminReplyMarkup(request.id)
+  }).catch(() => null);
+  if (sent?.message_id) {
+    request.adminMessageId = sent.message_id;
+    if (options.resetToPending) {
+      request.status = 'pending';
+      request.delayMinutes = null;
+      request.delayUntil = null;
+    }
+    await request.save();
+  }
+  return sent;
+}
+
+async function sendActivationWrongEmailPromptToUser(request, customText = null) {
+  if (!request) return null;
+  return bot.sendMessage(request.userId, customText || await getText(request.userId, 'activationWrongEmailUserWithButton'), {
+    reply_markup: {
+      inline_keyboard: [[{ text: await getText(request.userId, 'activationSendEmailButton'), callback_data: `activation_send_email_${request.id}` }]]
+    }
+  }).catch(() => null);
+}
+
+async function sendActivationDelayOptionsToUser(request) {
+  if (!request) return null;
+  const duration = await formatActivationDelayDurationForUser(request.userId, request.delayMinutes || 0);
+  return bot.sendMessage(request.userId, await getText(request.userId, 'activationDelayUserNotice', { duration }), {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: await getText(request.userId, 'activationDelayAcceptButton'), callback_data: `activation_delay_accept_${request.id}` }],
+        [{ text: await getText(request.userId, 'activationDelayCancelRefundButton'), callback_data: `activation_delay_refund_${request.id}` }],
+        [{ text: await getText(request.userId, 'activationDelayEmailWrongButton'), callback_data: `activation_delay_email_wrong_${request.id}` }]
+      ]
+    }
+  }).catch(() => null);
+}
+
+async function refundActivationRequest(request, reason = 'user_cancelled_delay') {
+  if (!request || isActivationRequestClosed(request)) return null;
+  const balance = await getUserBalanceValue(request.userId);
+  const nextBalance = balance + Number(request.amount || 0);
+  await User.update({ balance: nextBalance }, { where: { id: request.userId } });
+  await BalanceTransaction.create({
+    userId: request.userId,
+    amount: Number(request.amount || 0),
+    type: 'refund',
+    status: 'completed',
+    caption: `Activation request refund #${request.id} (${reason})`
+  });
+  request.status = 'refunded';
+  request.delayMinutes = null;
+  request.delayUntil = null;
+  await request.save();
+  return nextBalance;
+}
+
+let activationReminderSweepRunning = false;
+async function processDueActivationDelayReminders() {
+  if (activationReminderSweepRunning) return;
+  activationReminderSweepRunning = true;
+  try {
+    const due = await ActivationRequest.findAll({
+      where: {
+        status: 'delayed',
+        delayUntil: { [Op.lte]: new Date() }
+      },
+      limit: 25,
+      order: [['delayUntil', 'ASC']]
+    });
+
+    for (const request of due) {
+      await sendActivationRequestToAdmin(request, {
+        prefix: await getText(ADMIN_ID, 'activationAdminDelayReminderPrefix'),
+        resetToPending: true
+      });
+    }
+  } catch (err) {
+    console.error('Activation delay sweep error:', err.message);
+  } finally {
+    activationReminderSweepRunning = false;
+  }
 }
 
 function getDigitalSectionCategory(sectionId) {
@@ -10315,6 +10561,114 @@ bot.on('callback_query', async query => {
       return;
     }
 
+
+    const adminActivationWrongEmailMatch = data.match(/^admin_activation_email_wrong_(\d+)$/);
+    if (adminActivationWrongEmailMatch && isAdmin(userId)) {
+      const request = await ActivationRequest.findByPk(parseInt(adminActivationWrongEmailMatch[1], 10));
+      if (!request || isActivationRequestClosed(request)) {
+        await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'activationRequestClosed'), show_alert: true });
+        return;
+      }
+      request.status = 'email_rejected';
+      request.delayMinutes = null;
+      request.delayUntil = null;
+      await request.save();
+      await sendActivationWrongEmailPromptToUser(request);
+      await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'activationAdminWrongEmailForwarded') });
+      return;
+    }
+
+    const adminActivationDelayMatch = data.match(/^admin_activation_delay_(\d+)$/);
+    if (adminActivationDelayMatch && isAdmin(userId)) {
+      const request = await ActivationRequest.findByPk(parseInt(adminActivationDelayMatch[1], 10));
+      if (!request || isActivationRequestClosed(request)) {
+        await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'activationRequestClosed'), show_alert: true });
+        return;
+      }
+      await setUserState(userId, { action: 'activation_delay_minutes', requestId: request.id });
+      await bot.sendMessage(userId, await getText(userId, 'activationAdminDelayPrompt'), {
+        reply_markup: await getBackAndCancelReplyMarkup(userId, 'cancel_action')
+      });
+      await bot.answerCallbackQuery(query.id);
+      return;
+    }
+
+    const activationDelayAcceptMatch = data.match(/^activation_delay_accept_(\d+)$/);
+    if (activationDelayAcceptMatch) {
+      const request = await ActivationRequest.findByPk(parseInt(activationDelayAcceptMatch[1], 10));
+      if (!request || String(request.status) !== 'delayed') {
+        await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'activationRequestClosed'), show_alert: true });
+        return;
+      }
+      const meta = getActivationRequestMeta(request);
+      request.meta = { ...meta, delayAcceptedAt: new Date().toISOString() };
+      await request.save();
+      await bot.sendMessage(userId, await getText(userId, 'activationDelayAcceptedUser', {
+        duration: await formatActivationDelayDurationForUser(userId, request.delayMinutes || 0)
+      }));
+      await cleanupPressedMessage();
+      await bot.answerCallbackQuery(query.id);
+      return;
+    }
+
+    const activationDelayRefundMatch = data.match(/^activation_delay_refund_(\d+)$/);
+    if (activationDelayRefundMatch) {
+      const request = await ActivationRequest.findByPk(parseInt(activationDelayRefundMatch[1], 10));
+      if (!request || String(request.status) !== 'delayed') {
+        await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'activationRequestClosed'), show_alert: true });
+        return;
+      }
+      const newBalance = await refundActivationRequest(request, 'user_cancelled_delay');
+      await bot.sendMessage(userId, await getText(userId, 'activationRefundedUser', {
+        balance: formatUsdPrice(newBalance)
+      }));
+      await bot.sendMessage(ADMIN_ID, await getText(ADMIN_ID, 'activationRefundedAdmin', {
+        requestId: request.id
+      })).catch(() => {});
+      await cleanupPressedMessage();
+      await bot.answerCallbackQuery(query.id);
+      return;
+    }
+
+    const activationDelayEmailWrongMatch = data.match(/^activation_delay_email_wrong_(\d+)$/);
+    if (activationDelayEmailWrongMatch) {
+      const request = await ActivationRequest.findByPk(parseInt(activationDelayEmailWrongMatch[1], 10));
+      if (!request || String(request.status) !== 'delayed') {
+        await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'activationRequestClosed'), show_alert: true });
+        return;
+      }
+      request.status = 'email_rejected';
+      request.delayMinutes = null;
+      request.delayUntil = null;
+      await request.save();
+      await bot.sendMessage(userId, `${await getText(userId, 'activationWrongEmailUser')}
+
+${await getText(userId, 'activationDelayNotifyUserPrompt')}`, {
+        reply_markup: {
+          inline_keyboard: [[{ text: await getText(userId, 'activationSendEmailButton'), callback_data: `activation_send_email_${request.id}` }]]
+        }
+      });
+      await cleanupPressedMessage();
+      await bot.answerCallbackQuery(query.id);
+      return;
+    }
+
+    const activationSendEmailMatch = data.match(/^activation_send_email_(\d+)$/);
+    if (activationSendEmailMatch) {
+      const request = await ActivationRequest.findByPk(parseInt(activationSendEmailMatch[1], 10));
+      if (!request || isActivationRequestClosed(request)) {
+        await bot.answerCallbackQuery(query.id, { text: await getText(userId, 'activationRequestClosed'), show_alert: true });
+        return;
+      }
+      await setUserState(userId, { action: 'activation_resend_email', requestId: request.id });
+      await bot.sendMessage(userId, await getText(userId, 'activationEmailPrompt'), {
+        reply_markup: await getBackAndCancelReplyMarkup(userId, 'back_to_menu')
+      });
+      await cleanupPressedMessage();
+      await bot.answerCallbackQuery(query.id);
+      return;
+    }
+
     if (data === 'daily_gift') {
       const result = await claimDailyGift(userId);
       if (result.success) {
@@ -12126,6 +12480,56 @@ bot.on('message', async msg => {
       return;
     }
 
+    if (state?.action === 'activation_delay_minutes' && isAdmin(userId)) {
+      const request = await ActivationRequest.findByPk(state.requestId);
+      if (!request || isActivationRequestClosed(request)) {
+        await bot.sendMessage(userId, await getText(userId, 'activationRequestClosed'));
+        await clearUserState(userId);
+        return;
+      }
+      const delayMinutes = parseActivationDelayMinutes(text || '');
+      if (!delayMinutes) {
+        await bot.sendMessage(userId, await getText(userId, 'activationInvalidDelayValue'));
+        return;
+      }
+      request.status = 'delayed';
+      request.delayMinutes = delayMinutes;
+      request.delayUntil = new Date(Date.now() + (delayMinutes * 60 * 1000));
+      await request.save();
+      await bot.sendMessage(userId, await getText(userId, 'activationAdminDelaySaved', {
+        duration: await formatActivationDelayDurationForUser(userId, delayMinutes)
+      }));
+      await sendActivationDelayOptionsToUser(request);
+      await clearUserState(userId);
+      return;
+    }
+
+    if (state?.action === 'activation_resend_email') {
+      const request = await ActivationRequest.findByPk(state.requestId);
+      const email = String(text || '').trim();
+      if (!request || isActivationRequestClosed(request)) {
+        await bot.sendMessage(userId, await getText(userId, 'activationRequestClosed'));
+        await clearUserState(userId);
+        return;
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        await bot.sendMessage(userId, await getText(userId, 'invalidEmail'));
+        return;
+      }
+      request.email = email;
+      request.status = 'pending';
+      request.delayMinutes = null;
+      request.delayUntil = null;
+      await request.save();
+      await sendActivationRequestToAdmin(request, {
+        prefix: await getText(ADMIN_ID, 'activationEmailUpdatedAdminPrefix')
+      });
+      await bot.sendMessage(userId, await getText(userId, 'activationEmailUpdatedUser'));
+      await clearUserState(userId);
+      await sendMainMenu(userId);
+      return;
+    }
+
     if (await isSupportThreadOpen(userId)) {
       await forwardSupportMessageToAdmin(userId, msg);
       await bot.sendMessage(userId, await getText(userId, 'supportUserMessageForwarded'), {
@@ -12169,17 +12573,23 @@ bot.on('message', async msg => {
       }
       await User.update({ balance: balance - amount }, { where: { id: userId } });
       await BalanceTransaction.create({ userId, amount: -amount, type: 'purchase', status: 'completed', caption: `Activation request for merchant ${merchant.id}` });
-      const adminSource = await getText(userId, (await isEmailActivationProduct(merchant)) ? 'activationAdminSourceInvite' : 'activationAdminSourceStock');
       const chat = msg.from || {};
-      await bot.sendMessage(ADMIN_ID, `${await getText(userId, 'activationAdminNotice', {
-        service: await getMerchantDisplayName(merchant, userId),
-        name: `${chat.first_name || ''} ${chat.last_name || ''}`.trim() || '-',
-        username: chat.username ? '@' + chat.username : '-',
+      const activationRequest = await ActivationRequest.create({
         userId,
+        merchantId: merchant.id,
         email,
-        amount: formatUsdPrice(amount)
-      })}
-${adminSource}`).catch(() => {});
+        amount,
+        source: (await isEmailActivationProduct(merchant)) ? 'invite' : 'stock',
+        status: 'pending',
+        meta: {
+          firstName: chat.first_name || '',
+          lastName: chat.last_name || '',
+          username: chat.username || '',
+          serviceNameEn: merchant.nameEn || '',
+          serviceNameAr: merchant.nameAr || ''
+        }
+      });
+      await sendActivationRequestToAdmin(activationRequest);
       await bot.sendMessage(userId, await getText(userId, 'activationRequestSent', {
         service: await getMerchantDisplayName(merchant, userId),
         email,
@@ -12948,6 +13358,10 @@ sequelize.sync({ alter: true }).then(async () => {
   await getPrivateCodesChannelConfig();
   await getReferralCodesChannelConfig();
   await getBotUsername();
+  await processDueActivationDelayReminders();
+  setInterval(() => {
+    processDueActivationDelayReminders().catch(err => console.error('Activation reminder interval error:', err.message));
+  }, 60 * 1000);
 
   const PORT = process.env.PORT || 3000;
   app.get('/', (req, res) => res.send('Bot is running'));
