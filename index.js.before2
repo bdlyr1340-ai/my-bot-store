@@ -399,11 +399,10 @@ const DEFAULT_TEXTS = {
     no: '❌ No',
     merchantDeleted: 'Merchant deleted successfully.',
     referral: '🤝 Invite Friends',
-    dailyGift: '🎁 Daily Gift',
     redeemPoints: '🎁 Redeem Points',
     getFreeCode: '🎁 Get your free code',
     freeCodeMenu: '🎁 Get your free code',
-    referralInfo: 'Share your referral link with friends and earn 1 point plus {giftAmount} USD balance for each successful referral!\n\nYour referral link:\n<code>{link}</code>\n\nYour points: {points}\nYou can get {redeemableCodes} code(s) with your points.\n🎁 Every {requiredPoints} points = 1 free ChatGPT code!',
+    referralInfo: 'Share your referral link with friends and earn 1 point per successful referral!\n\nYour referral link:\n<code>{link}</code>\n\nYour points: {points}\nYou can get {redeemableCodes} code(s) with your points.\n🎁 Every {requiredPoints} points = 1 free ChatGPT code!',
     referralEarned: '🎉 You earned 1 referral point! Total points: {points}',
     notEnoughPoints: '❌ You do not have enough points. You have {points} points, and each code needs {requiredPoints} points.',
     redeemPointsAskAmount: 'Send the number of ChatGPT codes you want to redeem using your points. Each code costs {requiredPoints} points.',
@@ -768,11 +767,10 @@ const DEFAULT_TEXTS = {
     no: '❌ لا',
     merchantDeleted: 'تم حذف التاجر بنجاح.',
     referral: '🤝 دعوة الأصدقاء',
-    dailyGift: '🎁 الهدية اليومية',
     redeemPoints: '🎁 استبدال النقاط',
     getFreeCode: '🎁 احصل على كودك المجاني',
     freeCodeMenu: '🎁 احصل على كودك المجاني',
-    referralInfo: 'شارك رابط الإحالة الخاص بك مع أصدقائك واربح نقطة واحدة + {giftAmount} دولار رصيد لكل إحالة ناجحة!\n\nرابطك:\n<code>{link}</code>\n\nنقاطك: {points}\nيمكنك الحصول على {redeemableCodes} كود/أكواد من نقاطك.\n🎁 استبدل {requiredPoints} نقاط للحصول على كود ChatGPT مجاناً!',
+    referralInfo: 'شارك رابط الإحالة الخاص بك مع أصدقائك واربح نقطة واحدة لكل إحالة ناجحة!\n\nرابطك:\n<code>{link}</code>\n\nنقاطك: {points}\n🎁 استبدل {requiredPoints} نقاط للحصول على كود ChatGPT مجاناً!',
     referralEarned: '🎉 لقد ربحت نقطة إحالة! إجمالي النقاط: {points}',
     notEnoughPoints: '❌ لا تملك نقاطًا كافية. لديك {points} نقطة، وكل كود يحتاج {requiredPoints} نقاط.',
     redeemPointsAskAmount: 'أرسل عدد كودات ChatGPT التي تريد أخذها بالنقاط. كل كود يحتاج {requiredPoints} نقاط.',
@@ -1043,7 +1041,7 @@ Object.assign(DEFAULT_TEXTS.en, {
   productDescriptionLine: 'Description: {description}',
   invalidBulkStockPairs: '❌ Bulk stock must be sent as pairs: email on one line and password on the next line.',
   emptyStockInput: '❌ Please send the stock/accounts first.',
-  digitalProductManageText: '🧾 {name}\nPrice: {price} USD\nRemaining stock: {stock}\nType: {type}\nAdded at: {createdAt}\nMain screen: {mainScreenStatus}\nDescription: {description}',
+  digitalProductManageText: '🧾 {name}\nPrice: {price} USD\nRemaining stock: {stock}\nType: {type}\nAdded at: {createdAt}\nDescription: {description}',
   buyNow: '🛒 Buy Now',
   digitalStockBroadcastToggleOn: '📣 Stock notification: ✅ ON',
   digitalStockBroadcastToggleOff: '📣 Stock notification: ❌ OFF',
@@ -1093,34 +1091,7 @@ Object.assign(DEFAULT_TEXTS.en, {
   supportUserMessageForwarded: '📨 Your message was delivered to support.',
   supportThreadAdminNotice: '📩 Live support message\n\nUsername: {username}\nName: {name}\nUser ID: {userId}\n\nMessage: {message}',
   digitalStockInputPrompt: 'Send the stock/accounts now.\n\nQuick formats supported:\nemail|password\nemail | password\nemail|password|verification\nemail|password|verification|extra note\n\nYou can also use the button below to add one account step by step.',
-  digitalProductListButton: '{name} - {price} USD | Available {stock}',
-  mainScreenDigitalProductButton: '{name} - {price} USD | Available {stock}',
-  toggleDigitalProductMainScreenShow: '📺 Show on the main screen',
-  toggleDigitalProductMainScreenHide: '🙈 Hide from the main screen',
-  digitalProductMainScreenShown: '✅ Product is now visible on the main screen.',
-  digitalProductMainScreenHidden: '✅ Product was hidden from the main screen.',
-  digitalProductMainScreenActive: 'Visible on the main screen',
-  digitalProductMainScreenHiddenStatus: 'Hidden from the main screen',
-  mainScreenProductsHeader: '🛍️ Available subscriptions:',
-  setReferralGiftAmount: '💵 Control referral gift amount',
-  enterReferralGiftAmount: 'Send the referral gift amount in USD (example: 0.10 or 1):',
-  currentReferralGiftAmount: 'Current referral gift: {amount} USD per successful invite',
-  referralGiftUpdated: '✅ Referral gift amount updated.',
-  referralGiftEarned: '🎁 You received {amount} USD as an invite gift. New balance: {balance} USD',
-  inviteModeOn: '🎟 Invitation mode: ON',
-  inviteModeOff: '📦 Stock mode: ON',
-  switchToInviteMode: '🔄 Switch from stock to invitation',
-  switchToStockMode: '🔄 Switch from invitation to stock',
-  onDemandStock: 'On demand',
-  activationEmailPrompt: 'Enter the email that should receive the activation invite:',
-  activationRequestSent: '✅ Your activation request was received.\n\nService: {service}\nEmail: {email}\nAmount: {amount} USD\n\nThe admin will complete it soon.',
-  activationAdminNotice: '📩 New activation request\n\nService: {service}\nUser: {name}\nUsername: {username}\nUser ID: {userId}\nEmail: {email}\nAmount: {amount} USD',
-  activationAdminSourceStock: '📦 Source: Stock',
-  activationAdminSourceInvite: '🎟 Source: Invitation',
-  dailyGiftClaimed: '🎁 Daily gift claimed successfully.\nAmount: {amount} USD\nNew balance: {balance} USD',
-  dailyGiftAlreadyClaimed: '⏳ You already claimed your daily gift today.\nCome back after: {timeLeft}',
-  dailyGiftButtonHint: 'Claim your daily bonus',
-  dailyGiftAdminCaption: 'Daily gift'
+  digitalProductListButton: '{name} - {price} USD | Available {stock}'
 });
 
 Object.assign(DEFAULT_TEXTS.ar, {
@@ -1141,33 +1112,6 @@ Object.assign(DEFAULT_TEXTS.ar, {
   editDigitalProductName: '✏️ تعديل اسم المنتج',
   editDigitalProductPrice: '💰 تعديل سعر المنتج',
   editDigitalProductDescription: '📝 تعديل وصف المنتج',
-  toggleDigitalProductMainScreenShow: '📺 إظهار على الشاشة الرئيسية',
-  toggleDigitalProductMainScreenHide: '🙈 إخفاء من الشاشة الرئيسية',
-  digitalProductMainScreenShown: '✅ تم إظهار المنتج على الشاشة الرئيسية.',
-  digitalProductMainScreenHidden: '✅ تم إخفاء المنتج من الشاشة الرئيسية.',
-  digitalProductMainScreenActive: 'ظاهر على الشاشة الرئيسية',
-  digitalProductMainScreenHiddenStatus: 'مخفي من الشاشة الرئيسية',
-  mainScreenProductsHeader: '🛍️ الاشتراكات المتوفرة:',
-  referralGiftSettings: '🎁 سنتات هدايا الدعوة',
-  setReferralGiftAmount: '💵 التحكم في سنتات هدايا الدعوة',
-  enterReferralGiftAmount: 'أرسل قيمة هدية الدعوة بالدولار (مثال: 0.10 أو 1):',
-  currentReferralGiftAmount: 'هدية الدعوة الحالية: {amount} دولار لكل دعوة ناجحة',
-  referralGiftUpdated: '✅ تم تحديث قيمة هدية الدعوة.',
-  referralGiftEarned: '🎁 حصلت على {amount} دولار كهدية دعوة. رصيدك الجديد: {balance} دولار',
-  inviteModeOn: '🎟 وضع الدعوة: مفعل',
-  inviteModeOff: '📦 وضع المخزون: مفعل',
-  switchToInviteMode: '🔄 تحويله من مخزون إلى دعوة',
-  switchToStockMode: '🔄 تحويله من دعوة إلى مخزون',
-  onDemandStock: 'حسب الطلب',
-  activationEmailPrompt: 'أرسل الإيميل الذي سيتم إرسال دعوة التفعيل إليه:',
-  activationRequestSent: '✅ تم استلام طلب التفعيل.\n\nالخدمة: {service}\nالإيميل: {email}\nالمبلغ: {amount} دولار\n\nسيقوم الأدمن بإكماله قريباً.',
-  activationAdminNotice: '📩 طلب تفعيل جديد\n\nالخدمة: {service}\nالاسم: {name}\nالمعرف: {username}\nايدي المستخدم: {userId}\nالإيميل: {email}\nالمبلغ: {amount} دولار',
-  activationAdminSourceStock: '📦 المصدر: مخزون',
-  activationAdminSourceInvite: '🎟 المصدر: دعوة',
-  dailyGiftClaimed: '🎁 تم استلام الهدية اليومية بنجاح.\nالقيمة: {amount} دولار\nرصيدك الجديد: {balance} دولار',
-  dailyGiftAlreadyClaimed: '⏳ لقد استلمت الهدية اليومية اليوم بالفعل.\nعد بعد: {timeLeft}',
-  dailyGiftButtonHint: 'استلم مكافأتك اليومية',
-  dailyGiftAdminCaption: 'هدية يومية',
   deleteDigitalProduct: '🗑️ حذف المنتج',
   viewDigitalProductStock: '📄 عرض المنتج المضاف',
   searchDigitalProductDuplicates: '🔎 البحث عن المكرر',
@@ -1197,7 +1141,7 @@ Object.assign(DEFAULT_TEXTS.ar, {
   productDescriptionLine: 'الوصف: {description}',
   invalidBulkStockPairs: '❌ يجب إرسال مخزون الحسابات على شكل أزواج: الإيميل في سطر والباسورد في السطر الذي يليه.',
   emptyStockInput: '❌ أرسل المخزون/الحسابات أولاً.',
-  digitalProductManageText: '🧾 {name}\nالسعر: {price} دولار\nالمخزون المتبقي: {stock}\nالنوع: {type}\nتاريخ الإضافة: {createdAt}\nالشاشة الرئيسية: {mainScreenStatus}\nالوصف: {description}',
+  digitalProductManageText: '🧾 {name}\nالسعر: {price} دولار\nالمخزون المتبقي: {stock}\nالنوع: {type}\nتاريخ الإضافة: {createdAt}\nالوصف: {description}',
   buyNow: '🛒 شراء الآن',
   digitalStockBroadcastToggleOn: '📣 إشعار المخزون: ✅ مفعل',
   digitalStockBroadcastToggleOff: '📣 إشعار المخزون: ❌ متوقف',
@@ -1247,8 +1191,7 @@ Object.assign(DEFAULT_TEXTS.ar, {
   supportUserMessageForwarded: '📨 تم إيصال رسالتك إلى الدعم.',
   supportThreadAdminNotice: '📩 رسالة دعم مباشرة\n\nالمعرف: {username}\nالاسم: {name}\nايدي المستخدم: {userId}\n\nالرسالة: {message}',
   digitalStockInputPrompt: 'أرسل الآن المخزون/الحسابات.\n\nالصيغ السريعة المدعومة:\nemail|password\nemail | password\nemail|password|verification\nemail|password|verification|ملاحظة إضافية\n\nويمكنك أيضاً استخدام زر «إضافة إيميل وباسورد» لإضافة حساب واحد خطوة بخطوة.',
-  digitalProductListButton: '{name} - {price} دولار | يوجد {stock}',
-  mainScreenDigitalProductButton: '{name} - {price} دولار | يوجد {stock}'
+  digitalProductListButton: '{name} - {price} دولار | يوجد {stock}'
 });
 
 Object.assign(DEFAULT_TEXTS.en, {
@@ -1637,13 +1580,6 @@ async function getReferralRedeemPoints() {
   const rawValue = await getGlobalSetting('referral_redeem_points', '10');
   const value = parseInt(rawValue, 10);
   return Number.isInteger(value) && value > 0 ? value : 10;
-}
-
-async function getReferralGiftAmount() {
-  const rawValue = await getGlobalSetting('referral_gift_amount', '0.10');
-  const value = parseFloat(rawValue);
-  if (!Number.isFinite(value) || value < 0) return 0.10;
-  return Math.round(value * 100) / 100;
 }
 
 async function getFreeCodeCooldownDays() {
@@ -2265,39 +2201,6 @@ function parseDigitalSectionIdFromCategory(category) {
   return match ? parseInt(match[1], 10) : null;
 }
 
-function getMerchantDescriptionMeta(merchant) {
-  return merchant && merchant.description && typeof merchant.description === 'object' ? { ...merchant.description } : {};
-}
-
-function isDigitalProductShownOnMainScreen(merchant) {
-  const meta = getMerchantDescriptionMeta(merchant);
-  return meta.showOnMainScreen === true;
-}
-
-async function setDigitalProductMainScreenVisibility(merchantId, visible) {
-  const merchant = await Merchant.findByPk(merchantId);
-  if (!merchant) return false;
-  const meta = getMerchantDescriptionMeta(merchant);
-  meta.showOnMainScreen = Boolean(visible);
-  merchant.description = meta;
-  await merchant.save();
-  return true;
-}
-
-async function getMainScreenDigitalProducts() {
-  const sections = await getDigitalSections();
-  const result = [];
-  for (const section of sections) {
-    const products = await getDigitalProductsForSection(section.id);
-    for (const product of products) {
-      if (isDigitalProductShownOnMainScreen(product)) {
-        result.push(product);
-      }
-    }
-  }
-  return result;
-}
-
 function isDigitalSectionCategory(category) {
   return Number.isInteger(parseDigitalSectionIdFromCategory(category));
 }
@@ -2401,73 +2304,6 @@ function getMerchantPlainDescription(merchant) {
   if (!merchant?.description) return '';
   if (merchant.description.type === 'text') return String(merchant.description.content || '').trim();
   return '';
-}
-
-
-function getMerchantMetaConfig(merchant) {
-  if (!merchant?.description || typeof merchant.description !== 'object') return {};
-  return merchant.description.meta && typeof merchant.description.meta === 'object'
-    ? { ...merchant.description.meta }
-    : {};
-}
-
-function setMerchantMetaConfig(merchant, patch = {}) {
-  const description = merchant?.description && typeof merchant.description === 'object'
-    ? { ...merchant.description }
-    : { type: 'text', content: '' };
-  description.meta = { ...getMerchantMetaConfig(merchant), ...patch };
-  merchant.description = description;
-  return description.meta;
-}
-
-async function isEmailActivationProduct(merchant) {
-  if (!merchant || !isDigitalSectionCategory(merchant.category)) return false;
-  const meta = getMerchantMetaConfig(merchant);
-  return Boolean(meta.inviteMode || meta.requiresEmailActivation);
-}
-
-function formatTimeLeft(ms, lang = 'en') {
-  const totalMinutes = Math.max(1, Math.ceil(ms / 60000));
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  if (lang === 'ar') {
-    if (hours > 0 && minutes > 0) return `${hours} ساعة و ${minutes} دقيقة`;
-    if (hours > 0) return `${hours} ساعة`;
-    return `${minutes} دقيقة`;
-  }
-  if (hours > 0 && minutes > 0) return `${hours}h ${minutes}m`;
-  if (hours > 0) return `${hours}h`;
-  return `${minutes}m`;
-}
-
-async function getDailyGiftAmount() {
-  const rawValue = await getGlobalSetting('daily_gift_amount', '0.05');
-  const value = parseFloat(rawValue);
-  if (!Number.isFinite(value) || value < 0) return 0.05;
-  return Math.round(value * 100) / 100;
-}
-
-async function claimDailyGift(userId) {
-  const amount = await getDailyGiftAmount();
-  const key = `daily_gift_last_${userId}`;
-  const rawLast = await getGlobalSetting(key, '');
-  const now = new Date();
-  if (rawLast) {
-    const last = new Date(rawLast);
-    if (!Number.isNaN(last.getTime())) {
-      const diff = now.getTime() - last.getTime();
-      const cooldown = 24 * 60 * 60 * 1000;
-      if (diff < cooldown) {
-        const user = await User.findByPk(userId);
-        return { success: false, remainingMs: cooldown - diff, lang: user?.lang || 'en' };
-      }
-    }
-  }
-  await User.increment({ balance: amount }, { where: { id: userId } });
-  await BalanceTransaction.create({ userId, amount, type: 'daily_gift', status: 'completed', caption: 'Daily gift' });
-  await Setting.upsert({ key, lang: 'global', value: now.toISOString() });
-  const user = await User.findByPk(userId);
-  return { success: true, amount, balance: Number(user?.balance || 0), lang: user?.lang || 'en' };
 }
 
 async function showChatGptPurchaseInfo(userId) {
@@ -2833,19 +2669,16 @@ async function showDigitalProductAdmin(userId, merchantId) {
     ? await getText(userId, 'typeBulk')
     : await getText(userId, 'typeSingle');
   const description = await getMerchantAdminDescriptionSummary(userId, merchant);
-  const mainScreenStatus = await getText(userId, isDigitalProductShownOnMainScreen(merchant) ? 'digitalProductMainScreenActive' : 'digitalProductMainScreenHiddenStatus');
-  const inviteMode = await isEmailActivationProduct(merchant);
 
   await bot.sendMessage(
     userId,
     await getText(userId, 'digitalProductManageText', {
       name: `${merchant.nameEn} / ${merchant.nameAr}`,
       price: formatUsdPrice(merchant.price),
-      stock: inviteMode ? await getText(userId, 'onDemandStock') : stock,
+      stock,
       type: typeText,
       createdAt: formatAdminDateTime(merchant.createdAt),
-      description,
-      mainScreenStatus
+      description
     }),
     {
       reply_markup: {
@@ -2858,8 +2691,6 @@ async function showDigitalProductAdmin(userId, merchantId) {
           [{ text: await getText(userId, 'editDigitalProductName'), callback_data: `admin_edit_digital_product_name_${merchant.id}` }],
           [{ text: await getText(userId, 'editDigitalProductPrice'), callback_data: `admin_edit_digital_product_price_${merchant.id}` }],
           [{ text: await getText(userId, 'editDigitalProductDescription'), callback_data: `admin_edit_digital_product_description_${merchant.id}` }],
-          [{ text: await getText(userId, isDigitalProductShownOnMainScreen(merchant) ? 'toggleDigitalProductMainScreenHide' : 'toggleDigitalProductMainScreenShow'), callback_data: `admin_toggle_digital_product_main_${merchant.id}` }],
-          [{ text: await getText(userId, inviteMode ? 'switchToStockMode' : 'switchToInviteMode'), callback_data: `admin_toggle_product_invite_${merchant.id}` }],
           [{ text: await getText(userId, 'deleteDigitalProduct'), callback_data: `admin_delete_digital_product_${merchant.id}` }],
           [{ text: await getText(userId, 'back'), callback_data: sectionId ? `admin_digital_section_${sectionId}` : 'admin_digital_subscriptions' }]
         ]
@@ -4893,21 +4724,6 @@ async function awardReferralPoints(referredUserId) {
       transaction: t
     });
 
-    const referralGiftAmount = await getReferralGiftAmount();
-    if (referralGiftAmount > 0) {
-      await User.increment(
-        { balance: referralGiftAmount },
-        { where: { id: referrer.id }, transaction: t }
-      );
-      await BalanceTransaction.create({
-        userId: referrer.id,
-        amount: referralGiftAmount,
-        type: 'referral_gift',
-        status: 'completed',
-        caption: `Referral gift for invited user ${referredUserId}`
-      }, { transaction: t });
-    }
-
     const milestoneBonus = await getReferralMilestoneBonus(rewardedReferralCount);
     if (milestoneBonus > 0) {
       await User.increment(
@@ -4927,14 +4743,6 @@ async function awardReferralPoints(referredUserId) {
     await bot.sendMessage(referrer.id, await getText(referrer.id, 'referralEarned', {
       points: updatedPoints
     }));
-
-    const updatedBalance = Number(updatedReferrer?.balance || 0);
-    if (referralGiftAmount > 0) {
-      await bot.sendMessage(referrer.id, await getText(referrer.id, 'referralGiftEarned', {
-        amount: formatUsdPrice(referralGiftAmount),
-        balance: formatUsdPrice(updatedBalance)
-      }));
-    }
 
     if (milestoneBonus > 0) {
       await bot.sendMessage(referrer.id, await getText(referrer.id, 'referralMilestoneBonus', {
@@ -5017,7 +4825,6 @@ const DEFAULT_BUTTONS = {
   my_balance: true,
   deposit: true,
   referral: true,
-  daily_gift: true,
   discount: true,
   my_purchases: true,
   support: true,
@@ -5038,7 +4845,6 @@ const DEFAULT_BUTTON_ORDER = [
   'my_purchases',
   'redeem',
   'referral',
-  'daily_gift',
   'discount',
   'support',
   'ai_assistant',
@@ -5162,7 +4968,6 @@ async function getMenuButtonItems(userId) {
     { id: 'my_purchases', name: await getText(userId, 'myPurchases') },
     { id: 'redeem', name: await getText(userId, 'redeem') },
     { id: 'referral', name: await getText(userId, 'referral') },
-    { id: 'daily_gift', name: await getText(userId, 'dailyGift') },
     { id: 'discount', name: await getText(userId, 'discountButton') },
     { id: 'support', name: await getText(userId, 'support') },
     { id: 'ai_assistant', name: await getText(userId, 'aiAssistant') },
@@ -7621,7 +7426,6 @@ async function sendMainMenu(userId) {
   const currentBalanceLine = await getCurrentBalanceLineText(userId);
   const digitalSections = await getDigitalSections();
   const digitalSectionMap = new Map(digitalSections.map(section => [getDigitalSectionCategory(section.id), section]));
-  const mainScreenProducts = await getMainScreenDigitalProducts();
 
   const buttonLabels = {
     buy: await getText(userId, 'buy'),
@@ -7631,7 +7435,6 @@ async function sendMainMenu(userId) {
     my_purchases: await getText(userId, 'myPurchases'),
     redeem: await getText(userId, 'redeem'),
     referral: await getText(userId, 'referral'),
-    daily_gift: await getText(userId, 'dailyGift'),
     discount: await getText(userId, 'discountButton'),
     support: await getText(userId, 'support'),
     ai_assistant: await getText(userId, 'aiAssistant'),
@@ -7642,24 +7445,18 @@ async function sendMainMenu(userId) {
   };
 
   const buttons = [];
-
-  for (const product of mainScreenProducts) {
-    const stock = await getMerchantAvailableStock(product.id);
-    const stockLabel = (await isEmailActivationProduct(product)) ? await getText(userId, 'onDemandStock') : stock;
-    const name = await getMerchantDisplayName(product, userId);
-    buttons.push([{
-      text: await getText(userId, 'mainScreenDigitalProductButton', { name, price: formatUsdPrice(product.price), stock: stockLabel }),
-      callback_data: `digital_product_${product.id}`
-    }]);
-  }
+  let addedDigitalSectionsGroupButton = false;
 
   for (const id of order) {
     const digitalSection = digitalSectionMap.get(id);
     if (digitalSection) {
-      buttons.push([{
-        text: `🧩 ${await getDigitalSectionDisplayName(digitalSection, userId)}`,
-        callback_data: `digital_section_${digitalSection.id}`
-      }]);
+      if (!addedDigitalSectionsGroupButton && visibility.digital_sections_group !== false && digitalSections.length > 0) {
+        buttons.push([{
+          text: buttonLabels.digital_sections_group,
+          callback_data: 'digital_sections_group'
+        }]);
+        addedDigitalSectionsGroupButton = true;
+      }
       continue;
     }
 
@@ -7672,9 +7469,9 @@ async function sendMainMenu(userId) {
     }
   }
 
-  const mainHeader = mainScreenProducts.length ? `\n\n${await getText(userId, 'mainScreenProductsHeader')}` : '';
+  await bot.sendMessage(userId, `${await getText(userId, 'menu')}
 
-  await bot.sendMessage(userId, `${await getText(userId, 'menu')}${mainHeader}\n\n${currentBalanceLine}`, {
+${currentBalanceLine}`, {
     reply_markup: { inline_keyboard: buttons }
   });
 }
@@ -7719,12 +7516,10 @@ async function showReferralSettingsAdmin(userId) {
   const freeCodeDays = await getFreeCodeCooldownDays();
   const milestonesText = await getReferralMilestonesText();
   const referralsEnabled = await getReferralEnabled();
-  const referralGiftAmount = await getReferralGiftAmount();
   const percentLine = await getText(userId, 'currentReferralPercent', { percent });
   const pointsLine = await getText(userId, 'currentRedeemPoints', { points: redeemPoints });
   const freeCodeDaysLine = await getText(userId, 'currentFreeCodeDays', { days: freeCodeDays });
   const milestonesLine = await getText(userId, 'currentReferralMilestones', { milestones: milestonesText });
-  const referralGiftLine = await getText(userId, 'currentReferralGiftAmount', { amount: formatUsdPrice(referralGiftAmount) });
   const referralsStatusLine = await getText(userId, referralsEnabled ? 'referralsEnabledStatus' : 'referralsDisabledStatus');
 
   const keyboard = {
@@ -7732,7 +7527,6 @@ async function showReferralSettingsAdmin(userId) {
       [{ text: await getText(userId, 'setReferralPercent'), callback_data: 'admin_set_referral_percent' }],
       [{ text: await getText(userId, 'setRedeemPoints'), callback_data: 'admin_set_redeem_points' }],
       [{ text: await getText(userId, 'setFreeCodeDays'), callback_data: 'admin_set_free_code_days' }],
-      [{ text: await getText(userId, 'setReferralGiftAmount'), callback_data: 'admin_set_referral_gift_amount' }],
       [{ text: await getText(userId, 'editReferralMilestones'), callback_data: 'admin_edit_referral_milestones' }],
       [{ text: await getText(userId, 'referralEligibleUsers'), callback_data: 'admin_referral_eligible_users' }],
       [{ text: await getText(userId, 'grantPoints'), callback_data: 'admin_grant_points' }],
@@ -7747,7 +7541,7 @@ async function showReferralSettingsAdmin(userId) {
 
   await bot.sendMessage(
     userId,
-    await getText(userId, 'manageReferralSettingsText', { percentLine, pointsLine, freeCodeDaysLine, milestonesLine: `${milestonesLine}\n${referralGiftLine}`, referralsStatusLine }),
+    await getText(userId, 'manageReferralSettingsText', { percentLine, pointsLine, freeCodeDaysLine, milestonesLine, referralsStatusLine }),
     { reply_markup: keyboard }
   );
 }
@@ -8543,9 +8337,7 @@ bot.on('callback_query', async query => {
       const canUse = await ensureUserAccess(userId, { sendJoinPrompt: true, sendCaptchaPrompt: true });
       if (canUse) {
         await tryAwardReferralIfEligible(userId);
-        if (currentState?.action !== 'awaiting_language') {
-          await bot.sendMessage(userId, await getText(userId, 'languageUpdated')).catch(() => {});
-        }
+        await bot.sendMessage(userId, await getText(userId, 'languageUpdated')).catch(() => {});
         await sendMainMenu(userId);
       }
       await cleanupPressedMessage();
@@ -8922,8 +8714,7 @@ bot.on('callback_query', async query => {
       const requiredPoints = await getEffectiveRedeemPointsForUser(userId);
       const redeemableCodes = await getRedeemableReferralCodesCount(userId);
       const fallbackLink = (await User.findByPk(userId))?.lang === 'ar' ? 'رابط الإحالة غير متاح حالياً' : 'Referral link is currently unavailable';
-      const giftAmount = await getReferralGiftAmount();
-      const info = await getText(userId, 'referralInfo', { link: escapeHtml(link || fallbackLink), points, requiredPoints, redeemableCodes, giftAmount: formatUsdPrice(giftAmount) });
+      const info = await getText(userId, 'referralInfo', { link: escapeHtml(link || fallbackLink), points, requiredPoints, redeemableCodes });
 
       const freeCodeButtonRow = await shouldShowFreeCodeButton(userId)
         ? [[{ text: await getText(userId, 'getFreeCode'), callback_data: 'get_free_code' }]]
@@ -9647,13 +9438,6 @@ bot.on('callback_query', async query => {
       return;
     }
 
-    if (data === 'admin_set_referral_gift_amount' && isAdmin(userId)) {
-      await setUserState(userId, { action: 'set_referral_gift_amount' });
-      await bot.sendMessage(userId, await getText(userId, 'enterReferralGiftAmount'));
-      await bot.answerCallbackQuery(query.id);
-      return;
-    }
-
     if (data === 'admin_set_redeem_points' && isAdmin(userId)) {
       await setUserState(userId, { action: 'set_redeem_points' });
       await bot.sendMessage(userId, await getText(userId, 'enterRedeemPoints'));
@@ -10162,19 +9946,6 @@ bot.on('callback_query', async query => {
       return;
     }
 
-    const toggleDigitalProductMainMatch = data.match(/^admin_toggle_digital_product_main_(\d+)$/);
-    if (toggleDigitalProductMainMatch && isAdmin(userId)) {
-      const merchantId = parseInt(toggleDigitalProductMainMatch[1], 10);
-      const merchant = await Merchant.findByPk(merchantId);
-      if (merchant) {
-        const nextVisible = !isDigitalProductShownOnMainScreen(merchant);
-        await setDigitalProductMainScreenVisibility(merchantId, nextVisible);
-        await bot.answerCallbackQuery(query.id, { text: await getText(userId, nextVisible ? 'digitalProductMainScreenShown' : 'digitalProductMainScreenHidden') });
-        await showDigitalProductAdmin(userId, merchantId);
-        return;
-      }
-    }
-
     const editDigitalProductDescriptionMatch = data.match(/^admin_edit_digital_product_description_(\d+)$/);
     if (editDigitalProductDescriptionMatch && isAdmin(userId)) {
       const merchantId = parseInt(editDigitalProductDescriptionMatch[1], 10);
@@ -10298,50 +10069,13 @@ bot.on('callback_query', async query => {
       return;
     }
 
-
-    const toggleProductInviteMatch = data.match(/^admin_toggle_product_invite_(\d+)$/);
-    if (toggleProductInviteMatch && isAdmin(userId)) {
-      const merchantId = parseInt(toggleProductInviteMatch[1], 10);
-      const merchant = await Merchant.findByPk(merchantId);
-      if (merchant) {
-        const meta = getMerchantMetaConfig(merchant);
-        const nextValue = !(meta.inviteMode || meta.requiresEmailActivation);
-        setMerchantMetaConfig(merchant, { inviteMode: nextValue, requiresEmailActivation: nextValue });
-        await merchant.save();
-      }
-      await showDigitalProductAdmin(userId, merchantId);
-      await cleanupPressedMessage();
-      await bot.answerCallbackQuery(query.id);
-      return;
-    }
-
-    if (data === 'daily_gift') {
-      const result = await claimDailyGift(userId);
-      if (result.success) {
-        await bot.sendMessage(userId, await getText(userId, 'dailyGiftClaimed', {
-          amount: formatUsdPrice(result.amount),
-          balance: formatUsdPrice(result.balance)
-        }));
-        await bot.sendMessage(ADMIN_ID, `🎁 ${await getText(userId, 'dailyGiftAdminCaption')}
-User ID: ${userId}
-Amount: ${formatUsdPrice(result.amount)} USD`).catch(() => {});
-      } else {
-        await bot.sendMessage(userId, await getText(userId, 'dailyGiftAlreadyClaimed', {
-          timeLeft: formatTimeLeft(result.remainingMs, result.lang)
-        }));
-      }
-      await cleanupPressedMessage();
-      await bot.answerCallbackQuery(query.id);
-      return;
-    }
-
     if (data.startsWith('digital_buy_')) {
       const merchantId = parseInt(data.split('_')[2], 10);
       const merchant = await Merchant.findByPk(merchantId);
       const available = await getMerchantAvailableStock(merchantId);
 
-      if (!merchant) {
-        await bot.sendMessage(userId, await getText(userId, 'error'));
+      if (!merchant || !available) {
+        await bot.sendMessage(userId, await getText(userId, 'noCodes'));
         await sendMainMenu(userId);
         await cleanupPressedMessage();
         await bot.answerCallbackQuery(query.id);
@@ -10350,25 +10084,6 @@ Amount: ${formatUsdPrice(result.amount)} USD`).catch(() => {});
 
       const currentState = safeParseState((await User.findByPk(userId)).state);
       const discountCode = currentState?.discountCode || null;
-
-      if (await isEmailActivationProduct(merchant)) {
-        await setUserState(userId, { action: 'digital_email_activation_purchase', merchantId, discountCode });
-        await bot.sendMessage(userId, await getText(userId, 'activationEmailPrompt'), {
-          reply_markup: await getBackAndCancelReplyMarkup(userId, `digital_product_${merchant.id}`)
-        });
-        await cleanupPressedMessage();
-        await bot.answerCallbackQuery(query.id);
-        return;
-      }
-
-      if (!available) {
-        await bot.sendMessage(userId, await getText(userId, 'noCodes'));
-        await sendMainMenu(userId);
-        await cleanupPressedMessage();
-        await bot.answerCallbackQuery(query.id);
-        return;
-      }
-
       await setUserState(userId, { action: 'buy', merchantId, discountCode });
       await bot.sendMessage(
         userId,
@@ -12144,48 +11859,6 @@ bot.on('message', async msg => {
         await bot.sendMessage(userId, await getText(userId, 'discountInvalid'));
         await clearUserState(userId);
       }
-      await sendMainMenu(userId);
-      return;
-    }
-
-
-    if (state?.action === 'digital_email_activation_purchase') {
-      const merchant = await Merchant.findByPk(state.merchantId);
-      const email = String(text || '').trim();
-      if (!merchant) {
-        await bot.sendMessage(userId, await getText(userId, 'error'));
-        await clearUserState(userId);
-        return;
-      }
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        await bot.sendMessage(userId, await getText(userId, 'invalidEmail'));
-        return;
-      }
-      const amount = parseFloat(merchant.price || 0) || 0;
-      const balance = await getUserBalanceValue(userId);
-      if (balance < amount) {
-        await bot.sendMessage(userId, await getText(userId, 'insufficientBalance', { balance: balance.toFixed(2), price: amount.toFixed(2), needed: amount.toFixed(2) }), { reply_markup: { inline_keyboard: [[{ text: await getText(userId, 'depositNow'), callback_data: 'deposit' }]] } });
-        return;
-      }
-      await User.update({ balance: balance - amount }, { where: { id: userId } });
-      await BalanceTransaction.create({ userId, amount: -amount, type: 'purchase', status: 'completed', caption: `Activation request for merchant ${merchant.id}` });
-      const adminSource = await getText(userId, (await isEmailActivationProduct(merchant)) ? 'activationAdminSourceInvite' : 'activationAdminSourceStock');
-      const chat = msg.from || {};
-      await bot.sendMessage(ADMIN_ID, `${await getText(userId, 'activationAdminNotice', {
-        service: await getMerchantDisplayName(merchant, userId),
-        name: `${chat.first_name || ''} ${chat.last_name || ''}`.trim() || '-',
-        username: chat.username ? '@' + chat.username : '-',
-        userId,
-        email,
-        amount: formatUsdPrice(amount)
-      })}
-${adminSource}`).catch(() => {});
-      await bot.sendMessage(userId, await getText(userId, 'activationRequestSent', {
-        service: await getMerchantDisplayName(merchant, userId),
-        email,
-        amount: formatUsdPrice(amount)
-      }));
-      await clearUserState(userId);
       await sendMainMenu(userId);
       return;
     }

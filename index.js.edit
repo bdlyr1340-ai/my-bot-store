@@ -2841,7 +2841,7 @@ async function showDigitalProductAdmin(userId, merchantId) {
     await getText(userId, 'digitalProductManageText', {
       name: `${merchant.nameEn} / ${merchant.nameAr}`,
       price: formatUsdPrice(merchant.price),
-      stock: inviteMode ? await getText(userId, 'onDemandStock') : stock,
+      stock,
       type: typeText,
       createdAt: formatAdminDateTime(merchant.createdAt),
       description,
@@ -7645,10 +7645,9 @@ async function sendMainMenu(userId) {
 
   for (const product of mainScreenProducts) {
     const stock = await getMerchantAvailableStock(product.id);
-    const stockLabel = (await isEmailActivationProduct(product)) ? await getText(userId, 'onDemandStock') : stock;
     const name = await getMerchantDisplayName(product, userId);
     buttons.push([{
-      text: await getText(userId, 'mainScreenDigitalProductButton', { name, price: formatUsdPrice(product.price), stock: stockLabel }),
+      text: await getText(userId, 'mainScreenDigitalProductButton', { name, price: formatUsdPrice(product.price), stock }),
       callback_data: `digital_product_${product.id}`
     }]);
   }
