@@ -1087,9 +1087,12 @@ Object.assign(DEFAULT_TEXTS.en, {
   askAiAboutThisProduct: '🤖 Ask AI about this item',
   stockAvailableInline: 'Available {stock}',
   addEmailPassword: '📧 Add Email & Password',
+  addEmailPassword2FA: '📧 Add Email+Pass+2FA',
   enterBulkEmail: 'Send the email now:',
   enterBulkPassword: 'Send the password now:',
   enterBulkVerify: 'Send the verification/check value now, or /skip:',
+  enterBulkEmailPassword2FA: 'Send it now in this format:\nemail~password~2FA',
+  invalidBulkEmailPassword2FA: '❌ Invalid format. Send it exactly like this:\nemail~password~2FA',
   enterBulkExtra: 'Send any extra note now, or /skip:',
   bulkAccountSaved: '✅ Account saved.',
   bulkAccountDuplicate: '⚠️ This account already exists in stock.',
@@ -1097,7 +1100,7 @@ Object.assign(DEFAULT_TEXTS.en, {
   done: '✅ Done',
   fieldEmail: 'Email',
   fieldPassword: 'Password',
-  fieldVerification: 'Verification',
+  fieldVerification: '2FA',
   fieldExtra: 'Extra',
   accountEntryTitle: 'Account #{index}',
   searchDeleteDigitalProductStock: '🔍 Search stock and delete',
@@ -1287,9 +1290,12 @@ Object.assign(DEFAULT_TEXTS.ar, {
   askAiAboutThisProduct: '🤖 اسأل الذكاء الاصطناعي عن هذا الاشتراك',
   stockAvailableInline: 'يوجد {stock}',
   addEmailPassword: '📧 إضافة إيميل وباسورد',
+  addEmailPassword2FA: '📧 إضافة إيميل+باس+2FA',
   enterBulkEmail: 'أرسل الإيميل الآن:',
   enterBulkPassword: 'أرسل الباسورد الآن:',
   enterBulkVerify: 'أرسل التحقق الآن أو /skip للتخطي:',
+  enterBulkEmailPassword2FA: 'أرسل الآن بهذا الترتيب:\nemail~password~2FA',
+  invalidBulkEmailPassword2FA: '❌ الصيغة غير صحيحة. أرسلها هكذا تماماً:\nemail~password~2FA',
   enterBulkExtra: 'أرسل أي ملاحظة إضافية الآن أو /skip للتخطي:',
   bulkAccountSaved: '✅ تم حفظ الحساب.',
   bulkAccountDuplicate: '⚠️ هذا الحساب موجود مسبقاً في المخزون.',
@@ -1297,7 +1303,7 @@ Object.assign(DEFAULT_TEXTS.ar, {
   done: '✅ تم',
   fieldEmail: 'الايميل',
   fieldPassword: 'الباسورد',
-  fieldVerification: 'التحقق',
+  fieldVerification: 'مصادقة ثنائية',
   fieldExtra: 'إضافة شي آخر',
   accountEntryTitle: 'الحساب #{index}',
   searchDeleteDigitalProductStock: '🔍 البحث في المخزون وحذفه',
@@ -3487,6 +3493,7 @@ async function getDigitalStockInputReplyMarkup(userId, merchant) {
   const rows = [];
   if (merchant?.type === 'bulk') {
     rows.push([{ text: await getText(userId, 'addEmailPassword'), callback_data: `admin_bulk_add_account_${merchant.id}` }]);
+    rows.push([{ text: await getText(userId, 'addEmailPassword2FA'), callback_data: `admin_bulk_add_account_2fa_${merchant.id}` }]);
   }
   rows.push([{ text: await getText(userId, 'cancel'), callback_data: merchant?.category ? `admin_digital_product_${merchant.id}` : 'cancel_action' }]);
   return { inline_keyboard: rows };
@@ -10347,6 +10354,28 @@ bot.on('callback_query', async query => {
       return;
     }
 
+    const bulkAddAccount2FAMatch = data.match(/^admin_bulk_add_account_2fa_(\d+)$/);
+    if (bulkAddAccount2FAMatch && isAdmin(userId)) {
+      const merchantId = parseInt(bulkAddAccount2FAMatch[1], 10);
+      await setUserState(userId, { action: 'bulk_account_entry_2fa', merchantId, returnTo: 'digital_product_admin' });
+      await bot.sendMessage(userId, await getText(userId, 'enterBulkEmailPassword2FA'), {
+        reply_markup: await getBackAndCancelReplyMarkup(userId, `admin_digital_product_${merchantId}`)
+      });
+      await bot.answerCallbackQuery(query.id);
+      return;
+    }
+
+    const bulkAddAnother2FAMatch = data.match(/^admin_bulk_account_2fa_again_(\d+)$/);
+    if (bulkAddAnother2FAMatch && isAdmin(userId)) {
+      const merchantId = parseInt(bulkAddAnother2FAMatch[1], 10);
+      await setUserState(userId, { action: 'bulk_account_entry_2fa', merchantId, returnTo: 'digital_product_admin' });
+      await bot.sendMessage(userId, await getText(userId, 'enterBulkEmailPassword2FA'), {
+        reply_markup: await getBackAndCancelReplyMarkup(userId, `admin_digital_product_${merchantId}`)
+      });
+      await bot.answerCallbackQuery(query.id);
+      return;
+    }
+
     const bulkAddAnotherMatch = data.match(/^admin_bulk_account_again_(\d+)$/);
     if (bulkAddAnotherMatch && isAdmin(userId)) {
       const merchantId = parseInt(bulkAddAnotherMatch[1], 10);
@@ -11473,6 +11502,51 @@ bot.on('message', async msg => {
         }));
         await clearUserState(userId);
         await showDigitalProductAdmin(userId, merchant.id);
+        return;
+      }
+
+      if (state.action === 'bulk_account_entry_2fa') {
+        const merchant = await Merchant.findByPk(state.merchantId);
+        if (!merchant) {
+          await bot.sendMessage(userId, await getText(userId, 'error'));
+          await clearUserState(userId);
+          return;
+        }
+
+        const trimmed = String(text || '').trim();
+        const parsedEntry = parseBulkStockPipeLine(trimmed);
+        const parsedExtra = parsedEntry ? parseStructuredStockExtra(parsedEntry.extra) : null;
+
+        if (!trimmed || !parsedEntry || !parsedExtra?.password || !parsedExtra?.verify) {
+          await bot.sendMessage(userId, await getText(userId, 'invalidBulkEmailPassword2FA'));
+          return;
+        }
+
+        const saveResult = await addSingleBulkAccountStock(merchant, {
+          email: parsedEntry.value,
+          password: parsedExtra.password,
+          verify: parsedExtra.verify,
+          note: parsedExtra.note || ''
+        });
+
+        if (!saveResult.success) {
+          await bot.sendMessage(userId, await getText(userId, 'emptyStockInput'));
+          return;
+        }
+
+        if (saveResult.added > 0 && isDigitalSectionCategory(merchant.category)) {
+          broadcastDigitalStockAdded(merchant, saveResult.added).catch(err => console.error('digital stock broadcast error:', err));
+        }
+
+        await setUserState(userId, { action: 'add_codes', merchantId: merchant.id, returnTo: 'digital_product_admin' });
+        await bot.sendMessage(userId, await getText(userId, saveResult.duplicate ? 'bulkAccountDuplicate' : 'bulkAccountSaved'), {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: await getText(userId, 'addAnotherAccount'), callback_data: `admin_bulk_account_2fa_again_${merchant.id}` }],
+              [{ text: await getText(userId, 'done'), callback_data: `admin_bulk_account_done_${merchant.id}` }]
+            ]
+          }
+        });
         return;
       }
 
