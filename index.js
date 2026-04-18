@@ -1295,9 +1295,9 @@ Object.assign(DEFAULT_TEXTS.ar, {
   bulkAccountDuplicate: '⚠️ هذا الحساب موجود مسبقاً في المخزون.',
   addAnotherAccount: '➕ إضافة حساب آخر',
   done: '✅ تم',
-  fieldEmail: 'ايميل',
-  fieldPassword: 'باسورد',
-  fieldVerification: 'تحقق',
+  fieldEmail: 'الايميل',
+  fieldPassword: 'الباسورد',
+  fieldVerification: 'التحقق',
   fieldExtra: 'إضافة شي آخر',
   accountEntryTitle: 'الحساب #{index}',
   searchDeleteDigitalProductStock: '🔍 البحث في المخزون وحذفه',
@@ -2815,7 +2815,7 @@ function parseMerchantStockEntries(merchant, rawInput) {
     const pairBuffer = [];
 
     for (const line of lines) {
-      if (line.includes('|')) {
+      if (line.includes('|') || line.includes('~')) {
         const parsedLine = parseBulkStockPipeLine(line);
         if (!parsedLine) return { error: 'pair_mismatch' };
         entries.push(parsedLine);
@@ -3435,11 +3435,17 @@ function buildMerchantStockRowText(rowOrEntry) {
 }
 
 function parseBulkStockPipeLine(line) {
-  const parts = String(line || '').split('|').map(v => v.trim());
+  const raw = String(line || '').trim();
+  if (!raw) return null;
+
+  const delimiter = raw.includes('|') ? '|' : (raw.includes('~') ? '~' : null);
+  if (!delimiter) return null;
+
+  const parts = raw.split(delimiter).map(v => v.trim());
   if (parts.length < 2 || !parts[0] || !parts[1]) return null;
   return {
     value: parts[0],
-    extra: createStructuredBulkExtra(parts[1], parts[2] || '', parts.slice(3).join(' | '))
+    extra: createStructuredBulkExtra(parts[1], parts[2] || '', parts.slice(3).join(` ${delimiter} `))
   };
 }
 
@@ -3461,16 +3467,16 @@ async function formatMerchantDeliveryHtml(userId, merchant, rawEntries = []) {
     const parsed = parseStructuredStockExtra(entry.extra);
     const lines = [
       `<b>${escapeHtml(titleLabel.replace('{index}', String(index + 1)))}</b>`,
-      `<b>${escapeHtml(emailLabel)}:</b>\n<code>${escapeHtml(entry.value)}</code>`,
-      `<b>${escapeHtml(passwordLabel)}:</b>\n<code>${escapeHtml(parsed.password || '')}</code>`
+      `<b>${escapeHtml(emailLabel)}:</b> <code>${escapeHtml(entry.value)}</code>`,
+      `<b>${escapeHtml(passwordLabel)}:</b> <code>${escapeHtml(parsed.password || '')}</code>`
     ];
 
     if (parsed.verify) {
-      lines.push(`<b>${escapeHtml(verificationLabel)}:</b>\n<code>${escapeHtml(parsed.verify)}</code>`);
+      lines.push(`<b>${escapeHtml(verificationLabel)}:</b> <code>${escapeHtml(parsed.verify)}</code>`);
     }
 
     if (parsed.note) {
-      lines.push(`<b>${escapeHtml(extraLabel)}:</b>\n<code>${escapeHtml(parsed.note)}</code>`);
+      lines.push(`<b>${escapeHtml(extraLabel)}:</b> <code>${escapeHtml(parsed.note)}</code>`);
     }
 
     return lines.join('\n');
