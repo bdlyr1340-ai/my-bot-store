@@ -309,6 +309,8 @@ const DEFAULT_TEXTS = {
     remainingBalanceLine: '💰 Remaining balance: {balance} USD',
     totalPaidLine: '💳 Total paid: {total} USD',
     quantityPurchasedLine: '🧮 Quantity: {qty}',
+    transactionIdLine: '🧾 Transaction ID: <code>{id}</code>',
+    transactionIdPlainLine: '🧾 Transaction ID: {id}',
     continueShopping: '🛒 Continue Shopping',
     enterDepositAmount: '💰 Send the amount in USD:',
     deposit: '💳 Deposit',
@@ -678,6 +680,8 @@ const DEFAULT_TEXTS = {
     remainingBalanceLine: '💰 الرصيد المتبقي: {balance} دولار',
     totalPaidLine: '💳 إجمالي المبلغ المدفوع: {total} دولار',
     quantityPurchasedLine: '🧮 الكمية: {qty}',
+    transactionIdLine: '🧾 معرف المعاملة: <code>{id}</code>',
+    transactionIdPlainLine: '🧾 معرف المعاملة: {id}',
     continueShopping: '🛒 متابعة الشراء',
     enterDepositAmount: '💰 أرسل مبلغ الشحن بالدولار:',
     deposit: '💳 شحن الرصيد',
@@ -1565,8 +1569,12 @@ async function getPostPurchaseReplyMarkup(userId, options = {}) {
 }
 
 async function sendPurchaseDeliveryMessage(userId, htmlMessage, options = {}) {
-  const { merchant = null, continueCallback = null, totalCost = null, newBalance = null, quantity = null } = options;
+  const { merchant = null, continueCallback = null, totalCost = null, newBalance = null, quantity = null, transactionId = null } = options;
   const summaryLines = [];
+
+  if (transactionId) {
+    summaryLines.push(await getText(userId, 'transactionIdLine', { id: escapeHtml(String(transactionId)) }));
+  }
 
   if (quantity !== null && quantity !== undefined) {
     summaryLines.push(await getText(userId, 'quantityPurchasedLine', { qty: quantity }));
@@ -1592,6 +1600,18 @@ async function sendPurchaseDeliveryMessage(userId, htmlMessage, options = {}) {
 
 function generateReferralCode(userId) {
   return `REF${userId}`;
+}
+
+function generatePublicTransactionId(prefix = 'TX') {
+  const safePrefix = String(prefix || 'TX').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4) || 'TX';
+  const stamp = Date.now().toString(36).toUpperCase();
+  const random = crypto.randomBytes(3).toString('hex').toUpperCase();
+  return `${safePrefix}-${stamp}-${random}`;
+}
+
+function getActivationRequestTransactionId(request) {
+  const meta = getActivationRequestMeta(request);
+  return meta.transactionId || null;
 }
 
 function generateRandomEmail() {
@@ -2420,6 +2440,7 @@ async function sendActivationRequestToAdmin(request, options = {}) {
   const serviceName = await getActivationRequestServiceName(request, ADMIN_ID);
   const fullName = [meta.firstName || '', meta.lastName || ''].join(' ').trim() || '-';
   const username = meta.username ? `@${String(meta.username).replace(/^@/, '')}` : '-';
+  const transactionId = getActivationRequestTransactionId(request);
   const message = `${prefix}${await getText(ADMIN_ID, 'activationAdminNotice', {
     service: serviceName,
     name: fullName,
@@ -2427,7 +2448,7 @@ async function sendActivationRequestToAdmin(request, options = {}) {
     userId: request.userId,
     email: request.email,
     amount: formatUsdPrice(request.amount)
-  })}
+  })}${transactionId ? `\n${await getText(ADMIN_ID, 'transactionIdPlainLine', { id: transactionId })}` : ''}
 ${await getText(ADMIN_ID, sourceKey)}`;
   const sent = await bot.sendMessage(ADMIN_ID, message, {
     reply_markup: await getActivationAdminReplyMarkup(request.id)
@@ -3611,7 +3632,8 @@ async function completeAssistantMerchantPurchase(userId, merchantId, quantity = 
       merchant,
       totalCost: result.totalCost,
       newBalance: result.newBalance,
-      quantity
+      quantity,
+      transactionId: result.transactionId
     });
 
     const remainingMerchantStock = await Code.count({ where: { merchantId: merchant.id, isUsed: false } });
@@ -3621,7 +3643,8 @@ async function completeAssistantMerchantPurchase(userId, merchantId, quantity = 
       codesCount: quantity,
       remainingStockText: String(remainingMerchantStock),
       deliveredItems: result.rawEntries || [],
-      totalCost: result.totalCost
+      totalCost: result.totalCost,
+      transactionId: result.transactionId
     });
     await awardReferralRewardForMerchantPurchase(userId, result.totalCost || (merchant.price * quantity));
     return { success: true };
@@ -4258,7 +4281,8 @@ async function sendAdminCodeActionNotice(userId, options = {}) {
       remainingStockText = 'من الموقع',
       extraCodeCount = null,
       deliveredItems = null,
-      totalCost = null
+      totalCost = null,
+      transactionId = null
     } = options;
 
     const user = await User.findByPk(userId);
@@ -4281,6 +4305,8 @@ async function sendAdminCodeActionNotice(userId, options = {}) {
 ` +
       `الايدي: ${userId}
 ` +
+      `${transactionId ? `معرف المعاملة: ${transactionId}
+` : ''}` +
       `الرصيد: ${Number(user?.balance || 0).toFixed(2)}
 ` +
       `عدد نقاطه: ${Number(user?.referralPoints || 0)}
@@ -7808,6 +7834,8 @@ async function processPurchase(userId, merchantId, quantity, discountCode = null
 
   const t = await sequelize.transaction();
   try {
+    const transactionId = generatePublicTransactionId('ORD');
+
     await User.update({ balance: currentBalance - totalCost, totalPurchases: user.totalPurchases + quantity }, {
       where: { id: userId },
       transaction: t
@@ -7817,7 +7845,8 @@ async function processPurchase(userId, merchantId, quantity, discountCode = null
       userId,
       amount: -totalCost,
       type: 'purchase',
-      status: 'completed'
+      status: 'completed',
+      txid: transactionId
     }, { transaction: t });
 
     await Code.update({ isUsed: true, usedBy: userId, soldAt: new Date() }, {
@@ -7828,7 +7857,7 @@ async function processPurchase(userId, merchantId, quantity, discountCode = null
     await t.commit();
     const rawEntries = codes.map(c => ({ value: c.value, extra: c.extra }));
     const codesText = rawEntries.map(entry => buildMerchantStockRowText(entry)).join('\n\n');
-    return { success: true, codes: codesText, rawEntries, discountApplied: discountPercent, unitPrice, totalCost, newBalance: currentBalance - totalCost };
+    return { success: true, codes: codesText, rawEntries, discountApplied: discountPercent, unitPrice, totalCost, newBalance: currentBalance - totalCost, transactionId };
   } catch (err) {
     await t.rollback();
     console.error('Purchase transaction error:', err);
@@ -8120,8 +8149,10 @@ async function processAutoChatGptCode(userId, options = {}) {
     }
   } else {
     const chargedAmount = price * codes.length;
+    const transactionId = generatePublicTransactionId('ORD');
     await User.update({ balance: currentBalance - chargedAmount }, { where: { id: userId } });
-    await BalanceTransaction.create({ userId, amount: -chargedAmount, type: 'purchase', status: 'completed' });
+    await BalanceTransaction.create({ userId, amount: -chargedAmount, type: 'purchase', status: 'completed', txid: transactionId });
+    options.transactionId = transactionId;
   }
 
   return {
@@ -8133,7 +8164,8 @@ async function processAutoChatGptCode(userId, options = {}) {
     partial: codes.length !== safeQuantity,
     price: price.toFixed(2),
     totalCost: (price * codes.length).toFixed(2),
-    newBalance: isFree ? null : (currentBalance - (price * codes.length)).toFixed(2)
+    newBalance: isFree ? null : (currentBalance - (price * codes.length)).toFixed(2),
+    transactionId: isFree ? null : options.transactionId
   };
 }
 
@@ -8254,7 +8286,7 @@ bot.onText(/\/admin/, async msg => {
 });
 
 bot.on('callback_query', async query => {
-  const userId = query.message.chat.id;
+  const userId = query?.message?.chat?.id || query?.from?.id;
   const data = query.data;
 
   try {
@@ -12151,8 +12183,9 @@ bot.on('message', async msg => {
         await bot.sendMessage(userId, await getText(userId, 'insufficientBalance', { balance: balance.toFixed(2), price: amount.toFixed(2), needed: amount.toFixed(2) }), { reply_markup: { inline_keyboard: [[{ text: await getText(userId, 'depositNow'), callback_data: 'deposit' }]] } });
         return;
       }
+      const transactionId = generatePublicTransactionId('ACT');
       await User.update({ balance: balance - amount }, { where: { id: userId } });
-      await BalanceTransaction.create({ userId, amount: -amount, type: 'purchase', status: 'completed', caption: `Activation request for merchant ${merchant.id}` });
+      await BalanceTransaction.create({ userId, amount: -amount, type: 'purchase', status: 'completed', caption: `Activation request for merchant ${merchant.id}`, txid: transactionId });
       const chat = msg.from || {};
       const activationRequest = await ActivationRequest.create({
         userId,
@@ -12166,15 +12199,18 @@ bot.on('message', async msg => {
           lastName: chat.last_name || '',
           username: chat.username || '',
           serviceNameEn: merchant.nameEn || '',
-          serviceNameAr: merchant.nameAr || ''
+          serviceNameAr: merchant.nameAr || '',
+          transactionId
         }
       });
       await sendActivationRequestToAdmin(activationRequest);
-      await bot.sendMessage(userId, await getText(userId, 'activationRequestSent', {
+      await bot.sendMessage(userId, `${await getText(userId, 'activationRequestSent', {
         service: await getMerchantDisplayName(merchant, userId),
         email,
         amount: formatUsdPrice(amount)
-      }));
+      })}
+
+${await getText(userId, 'transactionIdPlainLine', { id: transactionId })}`);
       await clearUserState(userId);
       await sendMainMenu(userId);
       return;
@@ -12214,7 +12250,8 @@ bot.on('message', async msg => {
           merchant,
           totalCost: result.totalCost,
           newBalance: result.newBalance,
-          quantity: qty
+          quantity: qty,
+          transactionId: result.transactionId
         });
 
         const remainingMerchantStock = await Code.count({ where: { merchantId: merchant.id, isUsed: false } });
@@ -12224,7 +12261,8 @@ bot.on('message', async msg => {
           codesCount: qty,
           remainingStockText: String(remainingMerchantStock),
           deliveredItems: result.rawEntries || [],
-          totalCost: result.totalCost
+          totalCost: result.totalCost,
+          transactionId: result.transactionId
         });
 
         const userObj = await User.findByPk(userId);
@@ -12292,12 +12330,14 @@ bot.on('message', async msg => {
                   }
                 );
               } else {
+                const transactionId = generatePublicTransactionId('ORD');
                 await User.update({ balance: currentBalance - totalCost }, { where: { id: userId }, transaction: t });
                 await BalanceTransaction.create({
                   userId,
                   amount: -totalCost,
                   type: 'purchase',
-                  status: 'completed'
+                  status: 'completed',
+                  txid: transactionId
                 }, { transaction: t });
                 await t.commit();
 
@@ -12310,7 +12350,8 @@ bot.on('message', async msg => {
                     continueCallback: 'chatgpt_code',
                     totalCost,
                     newBalance: currentBalance - totalCost,
-                    quantity: deliveredCodes.length
+                    quantity: deliveredCodes.length,
+                    transactionId
                   }
                 );
 
@@ -12321,7 +12362,8 @@ bot.on('message', async msg => {
                   codesCount: deliveredCodes.length,
                   remainingStockText: String(remainingFallback),
                   deliveredItems: deliveredCodes,
-                  totalCost
+                  totalCost,
+                  transactionId
                 });
               }
             } catch (err) {
@@ -12562,7 +12604,8 @@ bot.on('message', async msg => {
           continueCallback: 'chatgpt_code',
           totalCost: result.totalCost,
           newBalance: result.newBalance,
-          quantity: result.quantity
+          quantity: result.quantity,
+          transactionId: result.transactionId
         });
         await sendAdminCodeActionNotice(userId, {
           sourceKey: 'balance',
@@ -12570,7 +12613,8 @@ bot.on('message', async msg => {
           codesCount: Array.isArray(result.codes) ? result.codes.length : result.quantity,
           remainingStockText: 'من الموقع',
           deliveredItems: result.codes,
-          totalCost: result.totalCost
+          totalCost: result.totalCost,
+          transactionId: result.transactionId
         });
       } else if (result.reason === 'INSUFFICIENT_BALANCE') {
         const freshUser = await User.findByPk(userId);
@@ -12660,12 +12704,14 @@ bot.on('message', async msg => {
                   }
                 );
               } else {
+                const transactionId = generatePublicTransactionId('ORD');
                 await User.update({ balance: currentBalance - totalCost }, { where: { id: userId }, transaction: t });
                 await BalanceTransaction.create({
                   userId,
                   amount: -totalCost,
                   type: 'purchase',
-                  status: 'completed'
+                  status: 'completed',
+                  txid: transactionId
                 }, { transaction: t });
                 await t.commit();
 
@@ -12678,7 +12724,8 @@ bot.on('message', async msg => {
                     continueCallback: 'chatgpt_code',
                     totalCost,
                     newBalance: currentBalance - totalCost,
-                    quantity: deliveredCodes.length
+                    quantity: deliveredCodes.length,
+                    transactionId
                   }
                 );
 
@@ -12689,7 +12736,8 @@ bot.on('message', async msg => {
                   codesCount: deliveredCodes.length,
                   remainingStockText: String(remainingFallback),
                   deliveredItems: deliveredCodes,
-                  totalCost
+                  totalCost,
+                  transactionId
                 });
               }
             } catch (err) {
