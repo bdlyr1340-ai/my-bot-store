@@ -8286,7 +8286,7 @@ bot.onText(/\/admin/, async msg => {
 });
 
 bot.on('callback_query', async query => {
-  const userId = query?.message?.chat?.id || query?.from?.id;
+  const userId = query.message.chat.id;
   const data = query.data;
 
   try {
