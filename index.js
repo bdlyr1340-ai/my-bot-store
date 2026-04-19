@@ -348,6 +348,10 @@ const DEFAULT_TEXTS = {
     manageDiscountCodes: '🎟️ Manage Discount Codes',
     sendAnnouncement: '📢 Send Announcement',
     editCodeDeliveryMessage: '✏️ Edit Code Delivery Message',
+    searchTransactionIdAdmin: '🔎 Search Transaction ID',
+    enterTransactionIdSearch: 'Send the transaction ID now (4 letters/numbers):',
+    invalidTransactionIdSearch: '❌ Invalid transaction ID. Send 4 letters/numbers only.',
+    transactionSearchNoResults: '❌ No transaction was found with this ID.',
     chooseCodeMessageLanguage: 'Choose the language of the code message:',
     codeMessageArabic: '🇮🇶 Arabic Code Message',
     codeMessageEnglish: '🇺🇸 English Code Message',
@@ -719,6 +723,10 @@ const DEFAULT_TEXTS = {
     manageDiscountCodes: '🎟️ إدارة كودات الخصم',
     sendAnnouncement: '📢 إرسال إعلان',
     editCodeDeliveryMessage: '✏️ تعديل رسالة تسليم الكود',
+    searchTransactionIdAdmin: '🔎 البحث عن معرف المعاملة',
+    enterTransactionIdSearch: 'أرسل الآن معرف المعاملة (4 أحرف/أرقام):',
+    invalidTransactionIdSearch: '❌ معرف غير صالح. أرسل 4 أحرف أو أرقام فقط.',
+    transactionSearchNoResults: '❌ لم يتم العثور على معاملة بهذا المعرف.',
     chooseCodeMessageLanguage: 'اختر لغة رسالة الكود:',
     codeMessageArabic: '🇮🇶 رسالة الكود بالعربية',
     codeMessageEnglish: '🇺🇸 رسالة الكود بالإنجليزية',
@@ -1602,11 +1610,27 @@ function generateReferralCode(userId) {
   return `REF${userId}`;
 }
 
-function generatePublicTransactionId(prefix = 'TX') {
-  const safePrefix = String(prefix || 'TX').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4) || 'TX';
-  const stamp = Date.now().toString(36).toUpperCase();
-  const random = crypto.randomBytes(3).toString('hex').toUpperCase();
-  return `${safePrefix}-${stamp}-${random}`;
+function normalizePublicTransactionId(value) {
+  return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+function createShortPublicTransactionId(length = 4) {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = '';
+  const bytes = crypto.randomBytes(length);
+  for (let i = 0; i < length; i += 1) {
+    result += alphabet[bytes[i] % alphabet.length];
+  }
+  return result;
+}
+
+async function generatePublicTransactionId(prefix = 'TX') {
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const candidate = createShortPublicTransactionId(4);
+    const exists = await BalanceTransaction.count({ where: { txid: candidate } });
+    if (!exists) return candidate;
+  }
+  return createShortPublicTransactionId(4);
 }
 
 function getActivationRequestTransactionId(request) {
@@ -4939,6 +4963,144 @@ ${deliveredItemsText}` : ''}`;
   }
 }
 
+
+async function findAdminTransactionDetails(inputId) {
+  const rawInput = String(inputId || '').trim().toUpperCase();
+  const normalizedInput = normalizePublicTransactionId(rawInput);
+  if (!normalizedInput) return null;
+
+  let ledger = await BalanceTransaction.findOne({
+    where: { txid: { [Op.in]: [rawInput, normalizedInput] } },
+    order: [['createdAt', 'DESC']]
+  });
+
+  if (!ledger) {
+    const recentTransactions = await BalanceTransaction.findAll({
+      where: { txid: { [Op.ne]: null } },
+      order: [['createdAt', 'DESC']],
+      limit: 5000
+    });
+    ledger = recentTransactions.find(item => normalizePublicTransactionId(item.txid) === normalizedInput) || null;
+  }
+
+  if (!ledger) return null;
+
+  const user = await User.findByPk(ledger.userId);
+  const identity = await getTelegramIdentityById(ledger.userId);
+  const requests = await ActivationRequest.findAll({
+    where: { userId: ledger.userId },
+    order: [['createdAt', 'DESC']],
+    limit: 50
+  });
+  const activationRequest = requests.find(item => normalizePublicTransactionId(getActivationRequestTransactionId(item)) === normalizedInput) || null;
+
+  let merchantNames = [];
+  let deliveredItems = [];
+
+  if (activationRequest) {
+    const requestMerchant = activationRequest.merchantId ? await Merchant.findByPk(activationRequest.merchantId) : null;
+    const merchantName = requestMerchant
+      ? (requestMerchant.nameAr || requestMerchant.nameEn || '')
+      : (getActivationRequestMeta(activationRequest)?.serviceNameAr || getActivationRequestMeta(activationRequest)?.serviceNameEn || '');
+    if (merchantName) merchantNames.push(merchantName);
+  } else if (ledger.type === 'purchase') {
+    const txTime = new Date(ledger.createdAt || new Date());
+    const fromTime = new Date(txTime.getTime() - (2 * 60 * 1000));
+    const toTime = new Date(txTime.getTime() + (2 * 60 * 1000));
+    const deliveredCodes = await Code.findAll({
+      where: {
+        usedBy: ledger.userId,
+        soldAt: { [Op.between]: [fromTime, toTime] }
+      },
+      include: [{ model: Merchant }],
+      order: [['soldAt', 'ASC'], ['id', 'ASC']],
+      limit: 25
+    });
+    deliveredItems = deliveredCodes.map(item => ({ value: item.value, extra: item.extra }));
+    merchantNames = [...new Set(deliveredCodes.map(item => item.Merchant ? (item.Merchant.nameAr || item.Merchant.nameEn || '') : '').filter(Boolean))];
+  }
+
+  return {
+    ledger,
+    user,
+    identity,
+    activationRequest,
+    deliveredItems,
+    merchantNames
+  };
+}
+
+async function buildAdminTransactionDetailsMessage(adminUserId, details) {
+  const isArabic = (await getUserLanguage(adminUserId)) !== 'en';
+  const { ledger, user, identity, activationRequest, deliveredItems, merchantNames } = details || {};
+  const txid = ledger?.txid || '-';
+  const createdAt = formatAdminDateTime(ledger?.createdAt);
+  const amountText = `${Math.abs(Number(ledger?.amount || 0)).toFixed(2)} USD`;
+  const currentBalance = `${Number(user?.balance || 0).toFixed(2)} USD`;
+  const deliveredText = formatAdminDeliveredItemsText(deliveredItems, 1600);
+  const requestSource = activationRequest?.source === 'invite'
+    ? (isArabic ? 'دعوة' : 'Invite')
+    : activationRequest?.source === 'stock'
+      ? (isArabic ? 'مخزون' : 'Stock')
+      : '-';
+  const labels = isArabic ? {
+    title: '🔎 تفاصيل المعاملة',
+    id: '🧾 معرف المعاملة',
+    type: '📂 النوع',
+    status: '📌 الحالة',
+    amount: '💵 المبلغ',
+    date: '🕒 الوقت',
+    service: '🛍 الخدمة',
+    user: '👤 الاسم',
+    username: '🔗 المعرف',
+    userId: '🆔 ايدي المستخدم',
+    balance: '💰 الرصيد الحالي',
+    source: '🎟 المصدر',
+    email: '📧 الإيميل',
+    description: '📝 الوصف',
+    delivered: '📦 المحتوى المسلم'
+  } : {
+    title: '🔎 Transaction Details',
+    id: '🧾 Transaction ID',
+    type: '📂 Type',
+    status: '📌 Status',
+    amount: '💵 Amount',
+    date: '🕒 Time',
+    service: '🛍 Service',
+    user: '👤 Name',
+    username: '🔗 Username',
+    userId: '🆔 User ID',
+    balance: '💰 Current Balance',
+    source: '🎟 Source',
+    email: '📧 Email',
+    description: '📝 Description',
+    delivered: '📦 Delivered Content'
+  };
+
+  const lines = [
+    `<b>${labels.title}</b>`,
+    `${labels.id}: <code>${escapeHtml(String(txid))}</code>`,
+    `${labels.type}: ${escapeHtml(String(ledger?.type || '-'))}`,
+    `${labels.status}: ${escapeHtml(String(ledger?.status || '-'))}`,
+    `${labels.amount}: ${escapeHtml(amountText)}`,
+    `${labels.date}: ${escapeHtml(createdAt)}`,
+    `${labels.user}: ${escapeHtml(identity?.fullName || String(ledger?.userId || '-'))}`,
+    `${labels.username}: ${escapeHtml(identity?.usernameText || '-')}`,
+    `${labels.userId}: <code>${escapeHtml(String(ledger?.userId || '-'))}</code>`,
+    `${labels.balance}: ${escapeHtml(currentBalance)}`
+  ];
+
+  if (merchantNames.length) lines.push(`${labels.service}: ${escapeHtml(merchantNames.join(' / '))}`);
+  if (activationRequest) {
+    lines.push(`${labels.source}: ${escapeHtml(requestSource)}`);
+    lines.push(`${labels.email}: <code>${escapeHtml(String(activationRequest.email || '-'))}</code>`);
+  }
+  if (ledger?.caption) lines.push(`${labels.description}: ${escapeHtml(String(ledger.caption))}`);
+  if (deliveredText) lines.push(`\n<b>${labels.delivered}</b>\n<pre>${escapeHtml(deliveredText)}</pre>`);
+
+  return lines.join('\n');
+}
+
 async function getChannelConfig() {
   let config = await ChannelConfig.findOne();
   if (!config) {
@@ -8053,6 +8215,7 @@ async function showAdminPanel(userId) {
       [{ text: await getText(userId, 'setChatgptPrice'), callback_data: 'admin_set_chatgpt_price' }],
       [{ text: await getText(userId, 'addCodes'), callback_data: 'admin_add_codes' }],
       [{ text: await getText(userId, 'paymentMethods'), callback_data: 'admin_payment_methods' }],
+      [{ text: await getText(userId, 'searchTransactionIdAdmin'), callback_data: 'admin_search_transaction_id' }],
       [{ text: await getText(userId, 'stats'), callback_data: 'admin_stats' }],
       [{ text: await getText(userId, 'referralSettings'), callback_data: 'admin_referral_settings' }],
       [{ text: await getText(userId, 'manageRedeemServices'), callback_data: 'admin_manage_redeem_services' }],
@@ -8435,7 +8598,7 @@ async function processPurchase(userId, merchantId, quantity, discountCode = null
 
   const t = await sequelize.transaction();
   try {
-    const transactionId = generatePublicTransactionId('ORD');
+    const transactionId = await generatePublicTransactionId('ORD');
 
     await User.update({ balance: currentBalance - totalCost, totalPurchases: user.totalPurchases + quantity }, {
       where: { id: userId },
@@ -8750,7 +8913,7 @@ async function processAutoChatGptCode(userId, options = {}) {
     }
   } else {
     const chargedAmount = price * codes.length;
-    const transactionId = generatePublicTransactionId('ORD');
+    const transactionId = await generatePublicTransactionId('ORD');
     await User.update({ balance: currentBalance - chargedAmount }, { where: { id: userId } });
     await BalanceTransaction.create({ userId, amount: -chargedAmount, type: 'purchase', status: 'completed', txid: transactionId });
     options.transactionId = transactionId;
@@ -9122,6 +9285,15 @@ bot.on('callback_query', async query => {
 
     if (data === 'admin_manage_channel' && isAdmin(userId)) {
       await showChannelConfigAdmin(userId);
+      await bot.answerCallbackQuery(query.id);
+      return;
+    }
+
+    if (data === 'admin_search_transaction_id' && isAdmin(userId)) {
+      await setUserState(userId, { action: 'search_transaction_id' });
+      await bot.sendMessage(userId, await getText(userId, 'enterTransactionIdSearch'), {
+        reply_markup: await getBackAndCancelReplyMarkup(userId, 'admin')
+      });
       await bot.answerCallbackQuery(query.id);
       return;
     }
@@ -11198,6 +11370,28 @@ bot.on('message', async msg => {
         await showChannelConfigAdmin(userId);
         return;
       }
+
+      if (state.action === 'search_transaction_id') {
+        const rawInput = String(text || '').trim().toUpperCase();
+        const normalizedInput = normalizePublicTransactionId(rawInput);
+        if (!/^[A-Z0-9]{4}$/.test(normalizedInput)) {
+          await bot.sendMessage(userId, await getText(userId, 'invalidTransactionIdSearch'));
+          return;
+        }
+
+        const details = await findAdminTransactionDetails(rawInput);
+        if (!details) {
+          await bot.sendMessage(userId, await getText(userId, 'transactionSearchNoResults'));
+          return;
+        }
+
+        await clearUserState(userId);
+        await bot.sendMessage(userId, await buildAdminTransactionDetailsMessage(userId, details), {
+          parse_mode: 'HTML',
+          reply_markup: { inline_keyboard: [[{ text: await getText(userId, 'back'), callback_data: 'admin' }]] }
+        });
+        return;
+      }
     }
 
     if (state?.action === 'support_reply' && isAdmin(userId)) {
@@ -12784,7 +12978,7 @@ bot.on('message', async msg => {
         await bot.sendMessage(userId, await getText(userId, 'insufficientBalance', { balance: balance.toFixed(2), price: amount.toFixed(2), needed: amount.toFixed(2) }), { reply_markup: { inline_keyboard: [[{ text: await getText(userId, 'depositNow'), callback_data: 'deposit' }]] } });
         return;
       }
-      const transactionId = generatePublicTransactionId('ACT');
+      const transactionId = await generatePublicTransactionId('ACT');
       await User.update({ balance: balance - amount }, { where: { id: userId } });
       await BalanceTransaction.create({ userId, amount: -amount, type: 'purchase', status: 'completed', caption: `Activation request for merchant ${merchant.id}`, txid: transactionId });
       const chat = msg.from || {};
@@ -12931,7 +13125,7 @@ ${await getText(userId, 'transactionIdPlainLine', { id: transactionId })}`);
                   }
                 );
               } else {
-                const transactionId = generatePublicTransactionId('ORD');
+                const transactionId = await generatePublicTransactionId('ORD');
                 await User.update({ balance: currentBalance - totalCost }, { where: { id: userId }, transaction: t });
                 await BalanceTransaction.create({
                   userId,
@@ -13305,7 +13499,7 @@ ${await getText(userId, 'transactionIdPlainLine', { id: transactionId })}`);
                   }
                 );
               } else {
-                const transactionId = generatePublicTransactionId('ORD');
+                const transactionId = await generatePublicTransactionId('ORD');
                 await User.update({ balance: currentBalance - totalCost }, { where: { id: userId }, transaction: t });
                 await BalanceTransaction.create({
                   userId,
