@@ -2808,620 +2808,6 @@ function getMerchantStockCompositeKey(value, extra = '') {
 
 function buildMerchantStockRowText(rowOrEntry) {
   if (!rowOrEntry) return '';
-  return rowOrEntry.extra ? `${rowOrEntry.value}\n${rowOrEntry.extra}` : String(rowOrEntry.value || '');
-}
-
-function parseMerchantStockEntries(merchant, rawInput) {
-  const inputText = String(rawInput || '').trim();
-  if (!inputText) return { error: 'empty' };
-
-  if (merchant.type === 'bulk') {
-    const lines = inputText.split(/\r?\n/).map(v => v.trim()).filter(Boolean);
-    const entries = [];
-    const pairBuffer = [];
-
-    for (const line of lines) {
-      if (line.includes('|') || line.includes('~')) {
-        const parsedLine = parseBulkStockPipeLine(line);
-        if (!parsedLine) return { error: 'pair_mismatch' };
-        entries.push(parsedLine);
-      } else {
-        pairBuffer.push(line);
-      }
-    }
-
-    if (pairBuffer.length % 2 !== 0) return { error: 'pair_mismatch' };
-
-    for (let i = 0; i < pairBuffer.length; i += 2) {
-      entries.push({
-        value: pairBuffer[i],
-        extra: createStructuredBulkExtra(pairBuffer[i + 1])
-      });
-    }
-
-    return { entries };
-  }
-
-  const values = inputText.split(/[\s\r\n]+/).map(v => v.trim()).filter(Boolean);
-  return { entries: values.map(value => ({ value, extra: null })) };
-}
-
-async function addMerchantStockEntriesWithDedup(merchant, rawInput) {
-  const parsed = parseMerchantStockEntries(merchant, rawInput);
-  if (parsed.error) return { success: false, reason: parsed.error };
-
-  const existingRows = await Code.findAll({
-    where: { merchantId: merchant.id },
-    attributes: ['value', 'extra']
-  });
-
-  const seen = new Set(existingRows.map(row => getMerchantStockCompositeKey(row.value, row.extra)));
-  const toCreate = [];
-  let duplicates = 0;
-
-  for (const entry of parsed.entries) {
-    const key = getMerchantStockCompositeKey(entry.value, entry.extra);
-    if (!entry.value || seen.has(key)) {
-      duplicates += 1;
-      continue;
-    }
-    seen.add(key);
-    toCreate.push({
-      value: entry.value,
-      extra: entry.extra || null,
-      merchantId: merchant.id,
-      isUsed: false
-    });
-  }
-
-  if (toCreate.length) {
-    await Code.bulkCreate(toCreate);
-  }
-
-  return {
-    success: true,
-    added: toCreate.length,
-    duplicates,
-    inputCount: parsed.entries.length
-  };
-}
-
-async function getMerchantDuplicateGroups(merchantId) {
-  const rows = await Code.findAll({
-    where: { merchantId },
-    order: [['id', 'ASC']]
-  });
-
-  const groups = new Map();
-  for (const row of rows) {
-    const key = getMerchantStockCompositeKey(row.value, row.extra);
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(row);
-  }
-
-  return [...groups.entries()]
-    .filter(([, groupRows]) => groupRows.length > 1)
-    .map(([key, groupRows]) => ({
-      key,
-      rows: groupRows,
-      text: buildMerchantStockRowText(groupRows[0]),
-      total: groupRows.length,
-      unused: groupRows.filter(row => !row.isUsed).length,
-      used: groupRows.filter(row => row.isUsed).length
-    }));
-}
-
-async function formatMerchantDuplicateGroups(userId, groups, limit = 20) {
-  const availableLabel = await getText(userId, 'stockStatusAvailable');
-  const soldLabel = await getText(userId, 'stockStatusSold');
-  const sliced = groups.slice(0, limit);
-  let output = sliced.map((group, index) => {
-    return `${index + 1}) x${group.total} | ${availableLabel}: ${group.unused} | ${soldLabel}: ${group.used}\n${truncateText(group.text, 500)}`;
-  }).join('\n\n');
-
-  if (groups.length > limit) {
-    output += `\n\n... +${groups.length - limit} more`;
-  }
-
-  return output || '-';
-}
-
-async function deleteMerchantDuplicateRows(merchantId) {
-  const rows = await Code.findAll({
-    where: { merchantId },
-    order: [['id', 'ASC']]
-  });
-
-  const seen = new Set();
-  const deletableIds = [];
-  let locked = 0;
-
-  for (const row of rows) {
-    const key = getMerchantStockCompositeKey(row.value, row.extra);
-    if (!seen.has(key)) {
-      seen.add(key);
-      continue;
-    }
-
-    if (row.isUsed) {
-      locked += 1;
-      continue;
-    }
-
-    deletableIds.push(row.id);
-  }
-
-  if (deletableIds.length) {
-    await Code.destroy({ where: { id: deletableIds } });
-  }
-
-  return { count: deletableIds.length, locked };
-}
-
-async function sendDigitalProductStockPreview(userId, merchantId) {
-  const merchant = await Merchant.findByPk(merchantId);
-  if (!merchant) {
-    await bot.sendMessage(userId, await getText(userId, 'error'));
-    return;
-  }
-
-  const rows = await Code.findAll({
-    where: { merchantId },
-    order: [['id', 'ASC']]
-  });
-
-  if (!rows.length) {
-    await bot.sendMessage(userId, await getText(userId, 'noDigitalProductStock'));
-    return;
-  }
-
-  const displayName = `${merchant.nameEn} / ${merchant.nameAr}`;
-  const availableLabel = await getText(userId, 'stockStatusAvailable');
-  const soldLabel = await getText(userId, 'stockStatusSold');
-
-  await bot.sendMessage(userId, await getText(userId, 'digitalStockViewTitle', {
-    name: displayName,
-    count: rows.length
-  }));
-
-  const entryBlocks = [];
-  for (let index = 0; index < rows.length; index += 1) {
-    const row = rows[index];
-    entryBlocks.push([
-      await getText(userId, 'stockEntryLabel', { index: index + 1 }),
-      await getText(userId, 'addedAtLine', { createdAt: formatAdminDateTime(row.createdAt) }),
-      await getText(userId, 'stockStatusLine', { status: row.isUsed ? soldLabel : availableLabel }),
-      `<code>${escapeHtml(buildMerchantStockRowText(row))}</code>`
-    ].join('\n'));
-  }
-
-  for (const chunk of chunkArray(entryBlocks, 10)) {
-    await bot.sendMessage(userId, chunk.join('\n\n'), { parse_mode: 'HTML' });
-  }
-}
-
-async function deleteDigitalProductAndStock(merchantId) {
-  await Code.destroy({ where: { merchantId } });
-  await Merchant.destroy({ where: { id: merchantId } });
-}
-
-async function deleteDigitalSectionAndContent(sectionId) {
-  const merchants = await getDigitalProductsForSection(sectionId);
-  const merchantIds = merchants.map(merchant => merchant.id);
-
-  if (merchantIds.length) {
-    await Code.destroy({ where: { merchantId: { [Op.in]: merchantIds } } });
-    await Merchant.destroy({ where: { id: { [Op.in]: merchantIds } } });
-  }
-
-  await DigitalSection.destroy({ where: { id: sectionId } });
-  await resequenceDigitalSections();
-}
-
-async function showDigitalSubscriptionsAdmin(userId) {
-  const sections = await getAllDigitalSections();
-  const broadcastEnabled = await getDigitalStockBroadcastEnabled();
-  const keyboard = [
-    [{ text: await getText(userId, 'addDigitalSectionToMainMenu'), callback_data: 'admin_digital_add_section' }],
-    [{ text: await getText(userId, broadcastEnabled ? 'digitalStockBroadcastToggleOn' : 'digitalStockBroadcastToggleOff'), callback_data: 'admin_toggle_digital_stock_broadcast' }]
-  ];
-
-  for (const section of sections) {
-    keyboard.push([{
-      text: `${section.isActive ? '✅' : '⛔'} 🧩 ${section.nameEn} / ${section.nameAr}`,
-      callback_data: `admin_digital_section_${section.id}`
-    }]);
-  }
-
-  keyboard.push([{ text: await getText(userId, 'back'), callback_data: 'admin' }]);
-
-  await bot.sendMessage(userId, await getText(userId, 'digitalSubscriptionsChooseSection'), {
-    reply_markup: { inline_keyboard: keyboard }
-  });
-}
-
-async function showDigitalSectionAdmin(userId, sectionId) {
-  const section = await DigitalSection.findByPk(sectionId);
-  if (!section) {
-    await bot.sendMessage(userId, await getText(userId, 'error'));
-    return;
-  }
-
-  const sectionName = `${section.nameEn} / ${section.nameAr}`;
-  const products = await getDigitalProductsForSection(section.id);
-  const statusText = await getDigitalSectionStatusText(userId, section);
-  const keyboard = [
-    [{ text: await getText(userId, 'addDigitalProductInSection', { name: sectionName }), callback_data: `admin_digital_add_product_${section.id}` }],
-    [{ text: await getText(userId, 'editDigitalSectionName'), callback_data: `admin_edit_digital_section_${section.id}` }],
-    [{ text: await getText(userId, 'deleteDigitalSection'), callback_data: `admin_delete_digital_section_${section.id}` }]
-  ];
-
-  for (const product of products) {
-    const stock = await getMerchantAvailableStock(product.id);
-    keyboard.push([{
-      text: `${product.nameEn} / ${product.nameAr} - ${formatUsdPrice(product.price)} USD (${stock})`,
-      callback_data: `admin_digital_product_${product.id}`
-    }]);
-  }
-
-  keyboard.push([{ text: await getText(userId, 'back'), callback_data: 'admin_digital_subscriptions' }]);
-
-  await bot.sendMessage(userId, await getText(userId, 'digitalSectionManageText', {
-    name: sectionName,
-    status: statusText,
-    createdAt: formatAdminDateTime(section.createdAt),
-    count: products.length
-  }), {
-    reply_markup: { inline_keyboard: keyboard }
-  });
-}
-
-async function showDigitalProductAdmin(userId, merchantId) {
-  const merchant = await Merchant.findByPk(merchantId);
-  if (!merchant) {
-    await bot.sendMessage(userId, await getText(userId, 'error'));
-    return;
-  }
-
-  const sectionId = parseDigitalSectionIdFromCategory(merchant.category);
-  const stock = await getMerchantAvailableStock(merchant.id);
-  const typeText = merchant.type === 'bulk'
-    ? await getText(userId, 'typeBulk')
-    : await getText(userId, 'typeSingle');
-  const description = await getMerchantAdminDescriptionSummary(userId, merchant);
-  const mainScreenStatus = await getText(userId, isDigitalProductShownOnMainScreen(merchant) ? 'digitalProductMainScreenActive' : 'digitalProductMainScreenHiddenStatus');
-  const inviteMode = await isEmailActivationProduct(merchant);
-
-  await bot.sendMessage(
-    userId,
-    await getText(userId, 'digitalProductManageText', {
-      name: `${merchant.nameEn} / ${merchant.nameAr}`,
-      price: formatUsdPrice(merchant.price),
-      stock: inviteMode ? await getText(userId, 'onDemandStock') : stock,
-      type: typeText,
-      createdAt: formatAdminDateTime(merchant.createdAt),
-      description,
-      mainScreenStatus
-    }),
-    {
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: await getText(userId, 'addDigitalProductStock'), callback_data: `admin_digital_add_stock_${merchant.id}` }],
-          [{ text: await getText(userId, 'viewDigitalProductStock'), callback_data: `admin_view_digital_product_stock_${merchant.id}` }],
-          [{ text: await getText(userId, 'searchDeleteDigitalProductStock'), callback_data: `admin_search_delete_digital_product_stock_${merchant.id}` }],
-          [{ text: await getText(userId, 'searchDigitalProductDuplicates'), callback_data: `admin_search_digital_product_duplicates_${merchant.id}` }],
-          [{ text: await getText(userId, 'deleteDigitalProductDuplicates'), callback_data: `admin_delete_digital_product_duplicates_${merchant.id}` }],
-          [{ text: await getText(userId, 'editDigitalProductName'), callback_data: `admin_edit_digital_product_name_${merchant.id}` }],
-          [{ text: await getText(userId, 'editDigitalProductPrice'), callback_data: `admin_edit_digital_product_price_${merchant.id}` }],
-          [{ text: await getText(userId, 'editDigitalProductDescription'), callback_data: `admin_edit_digital_product_description_${merchant.id}` }],
-          [{ text: await getText(userId, isDigitalProductShownOnMainScreen(merchant) ? 'toggleDigitalProductMainScreenHide' : 'toggleDigitalProductMainScreenShow'), callback_data: `admin_toggle_digital_product_main_${merchant.id}` }],
-          [{ text: await getText(userId, inviteMode ? 'switchToStockMode' : 'switchToInviteMode'), callback_data: `admin_toggle_product_invite_${merchant.id}` }],
-          [{ text: await getText(userId, 'deleteDigitalProduct'), callback_data: `admin_delete_digital_product_${merchant.id}` }],
-          [{ text: await getText(userId, 'back'), callback_data: sectionId ? `admin_digital_section_${sectionId}` : 'admin_digital_subscriptions' }]
-        ]
-      }
-    }
-  );
-}
-
-async function showDigitalSectionsGroupForUser(userId) {
-  const sections = await getDigitalSections();
-  if (!sections.length) {
-    await bot.sendMessage(userId, `${await getText(userId, 'digitalSubscriptionsMenu')}
-
-${await getText(userId, 'digitalSectionsGroupEmpty')}`, {
-      reply_markup: { inline_keyboard: [[{ text: await getText(userId, 'back'), callback_data: 'back_to_menu' }]] }
-    });
-    return;
-  }
-
-  const buttons = [];
-  for (const section of sections) {
-    buttons.push([{
-      text: `🧩 ${await getDigitalSectionDisplayName(section, userId)}`,
-      callback_data: `digital_section_${section.id}`
-    }]);
-  }
-
-  buttons.push([{ text: await getText(userId, 'back'), callback_data: 'back_to_menu' }]);
-
-  await bot.sendMessage(userId, `${await getText(userId, 'digitalSubscriptionsMenu')}
-
-${await getText(userId, 'digitalSectionChooseProduct')}
-${await getCurrentBalanceLineText(userId)}`, {
-    reply_markup: { inline_keyboard: buttons }
-  });
-}
-
-async function showDigitalSectionForUser(userId, sectionId) {
-  const section = await DigitalSection.findByPk(sectionId);
-  if (!section || !section.isActive) {
-    await bot.sendMessage(userId, await getText(userId, 'error'));
-    return;
-  }
-
-  const products = await getDigitalProductsForSection(section.id);
-  const sectionName = await getDigitalSectionDisplayName(section, userId);
-  if (!products.length) {
-    await bot.sendMessage(userId, `🧩 <b>${escapeHtml(sectionName)}</b>
-
-${await getText(userId, 'digitalSectionEmpty')}`, {
-      parse_mode: 'HTML',
-      reply_markup: { inline_keyboard: [[{ text: await getText(userId, 'back'), callback_data: 'back_to_menu' }]] }
-    });
-    return;
-  }
-
-  const buttons = [];
-  for (const product of products) {
-    const stock = await getMerchantAvailableStock(product.id);
-    const name = await getMerchantDisplayName(product, userId);
-    buttons.push([{
-      text: await getText(userId, 'digitalProductListButton', {
-        name,
-        price: formatUsdPrice(product.price),
-        stock
-      }),
-      callback_data: `digital_product_${product.id}`
-    }]);
-  }
-
-  buttons.push([{ text: await getText(userId, 'back'), callback_data: 'back_to_menu' }]);
-
-  await bot.sendMessage(userId, `🧩 <b>${escapeHtml(sectionName)}</b>
-
-${await getText(userId, 'digitalSectionChooseProduct')}
-${await getCurrentBalanceLineText(userId)}`, {
-    parse_mode: 'HTML',
-    reply_markup: { inline_keyboard: buttons }
-  });
-}
-
-async function showDigitalProductDetails(userId, merchantId) {
-  const merchant = await Merchant.findByPk(merchantId);
-  if (!merchant) {
-    await bot.sendMessage(userId, await getText(userId, 'error'));
-    return;
-  }
-
-  const sectionId = parseDigitalSectionIdFromCategory(merchant.category);
-  const section = sectionId ? await DigitalSection.findByPk(sectionId) : null;
-  if (!section || !section.isActive) {
-    await bot.sendMessage(userId, await getText(userId, 'error'));
-    return;
-  }
-  const stock = await getMerchantAvailableStock(merchant.id);
-  const name = await getMerchantDisplayName(merchant, userId);
-  let details = await getMerchantDescriptionForUser(userId, merchant);
-
-  if (!details) {
-    details = merchant?.description?.type === 'photo' || merchant?.description?.type === 'video'
-      ? await getText(userId, 'attachedDetailsNote')
-      : '-';
-  }
-
-  if (merchant?.description?.type === 'photo' && merchant.description.fileId) {
-    await bot.sendPhoto(userId, merchant.description.fileId);
-  } else if (merchant?.description?.type === 'video' && merchant.description.fileId) {
-    await bot.sendVideo(userId, merchant.description.fileId);
-  }
-
-  const aiAssistantEnabled = await getAiAssistantEnabled();
-  const inlineKeyboard = [
-    [{ text: await getText(userId, 'buyNow'), callback_data: `digital_buy_${merchant.id}` }]
-  ];
-  if (aiAssistantEnabled) {
-    inlineKeyboard.push([{ text: await getText(userId, 'askAiAboutThisProduct'), callback_data: `ai_about_product_${merchant.id}` }]);
-  }
-  inlineKeyboard.push([{ text: await getText(userId, 'back'), callback_data: `digital_section_${sectionId}` }]);
-
-  await bot.sendMessage(
-    userId,
-    `${await getText(userId, 'digitalProductDetailsText', {
-      name,
-      stock,
-      price: formatUsdPrice(merchant.price),
-      details
-    })}
-
-${await getCurrentBalanceLineText(userId)}`,
-    {
-      reply_markup: {
-        inline_keyboard: inlineKeyboard
-      }
-    }
-  );
-}
-
-
-
-
-const AI_TEXT_CACHE = new Map();
-
-function containsArabicText(value) {
-  return /[\u0600-\u06FF]/.test(String(value || ''));
-}
-
-function normalizeOpenAIContentToText(content) {
-  if (typeof content === 'string') return content;
-  if (Array.isArray(content)) {
-    return content.map(part => {
-      if (typeof part === 'string') return part;
-      if (part && typeof part === 'object') return String(part.text || part.content || '');
-      return '';
-    }).join('\n').trim();
-  }
-  if (content && typeof content === 'object') {
-    return String(content.text || content.content || '').trim();
-  }
-  return '';
-}
-
-function extractJsonObjectFromText(rawValue) {
-  const raw = normalizeOpenAIContentToText(rawValue).trim();
-  if (!raw) return null;
-
-  const candidates = [raw];
-  const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (fenceMatch?.[1]) candidates.push(fenceMatch[1].trim());
-
-  const firstBrace = raw.indexOf('{');
-  const lastBrace = raw.lastIndexOf('}');
-  if (firstBrace !== -1 && lastBrace > firstBrace) {
-    candidates.push(raw.slice(firstBrace, lastBrace + 1));
-  }
-
-  for (const candidate of candidates) {
-    try {
-      return JSON.parse(candidate);
-    } catch {}
-  }
-  return null;
-}
-
-async function callOpenAIJson(messages, options = {}) {
-  if (!OPENAI_API_KEY) return null;
-
-  const sendRequest = async (useJsonMode = true) => {
-    const body = {
-      model: OPENAI_MODEL,
-      messages,
-      temperature: options.temperature ?? 0.2,
-      max_tokens: options.maxTokens ?? 700
-    };
-
-    if (useJsonMode && options.disableResponseFormat !== true) {
-      body.response_format = { type: 'json_object' };
-    }
-
-    return await axios.post(`${OPENAI_BASE_URL}/chat/completions`, body, {
-      timeout: options.timeout ?? 25000,
-      headers: {
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-        'Content-Type': 'application/json'
-      }
-    });
-  };
-
-  try {
-    const response = await sendRequest(true);
-    const message = response?.data?.choices?.[0]?.message;
-    const parsed = message?.parsed || extractJsonObjectFromText(message?.content);
-    if (parsed && typeof parsed === 'object') return parsed;
-  } catch (err) {
-    const status = err?.response?.status;
-    if (![400, 404, 415, 422].includes(status)) {
-      console.error('OpenAI JSON error:', err?.response?.data || err.message);
-    }
-  }
-
-  try {
-    const response = await sendRequest(false);
-    const message = response?.data?.choices?.[0]?.message;
-    const parsed = message?.parsed || extractJsonObjectFromText(message?.content);
-    if (parsed && typeof parsed === 'object') return parsed;
-    console.error('OpenAI JSON parse error: response was not valid JSON');
-  } catch (err) {
-    console.error('OpenAI JSON retry error:', err?.response?.data || err.message);
-  }
-
-  return null;
-}
-
-async function translateTextForLang(lang, textValue, options = {}) {
-  const targetLang = lang === 'ar' ? 'ar' : 'en';
-  const trimmed = String(textValue || '').trim();
-  if (!trimmed || !OPENAI_API_KEY) return trimmed;
-
-  const cacheKey = `translate:${targetLang}:${trimmed}`;
-  if (AI_TEXT_CACHE.has(cacheKey)) return AI_TEXT_CACHE.get(cacheKey);
-
-  const payload = await callOpenAIJson([
-    {
-      role: 'system',
-      content: 'You translate user-facing Telegram bot text. Keep emojis, line breaks, URLs, emails, usernames, product names, codes, and numbers unchanged unless translation is clearly needed. Return JSON with translated_text only.'
-    },
-    {
-      role: 'user',
-      content: `Target language: ${targetLang === 'ar' ? 'Arabic' : 'English'}\n\nTranslate this text for a Telegram bot. If it is already suitable, return it naturally without extra commentary.\n\n${trimmed}`
-    }
-  ], { temperature: 0, maxTokens: Math.min(1500, Math.max(250, trimmed.length * 2)) });
-
-  const translated = String(payload?.translated_text || '').trim() || trimmed;
-  AI_TEXT_CACHE.set(cacheKey, translated);
-  return translated;
-}
-
-async function translateTextForUserLanguage(userId, textValue, options = {}) {
-  const user = await User.findByPk(userId, { attributes: ['lang'] });
-  return await translateTextForLang(user?.lang || 'en', textValue, options);
-}
-
-async function getMerchantDescriptionForUser(userId, merchant) {
-  const plain = getMerchantPlainDescription(merchant);
-  if (!plain) return '';
-  return await translateTextForUserLanguage(userId, plain);
-}
-
-function createStructuredBulkExtra(password, verify = '', note = '') {
-  return JSON.stringify({
-    password: String(password || '').trim(),
-    verify: String(verify || '').trim(),
-    note: String(note || '').trim()
-  });
-}
-
-function parseStructuredStockExtra(extra) {
-  const raw = String(extra || '').trim();
-  if (!raw) return { password: '', verify: '', note: '', structured: false };
-
-  try {
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      const password = String(parsed.password || parsed.pass || '').trim();
-      const verify = String(parsed.verify || parsed.verification || parsed.check || '').trim();
-      const note = String(parsed.note || parsed.extra || parsed.additional || '').trim();
-      if (password || verify || note) {
-        return { password, verify, note, structured: true };
-      }
-    }
-  } catch {
-    // ignore JSON parse errors
-  }
-
-  return { password: raw, verify: '', note: '', structured: false };
-}
-
-function getMerchantStockCompositeKey(value, extra = '') {
-  const parsed = parseStructuredStockExtra(extra);
-  const normalizedExtra = (parsed.password || parsed.verify || parsed.note)
-    ? createStructuredBulkExtra(parsed.password, parsed.verify, parsed.note)
-    : String(extra || '').trim();
-  return `${String(value || '').trim()}\n${normalizedExtra}`;
-}
-
-function buildMerchantStockRowText(rowOrEntry) {
-  if (!rowOrEntry) return '';
   const value = String(rowOrEntry.value || '').trim();
   const rawExtra = String(rowOrEntry.extra || '').trim();
   const parsed = parseStructuredStockExtra(rawExtra);
@@ -3438,6 +2824,62 @@ function buildMerchantStockRowText(rowOrEntry) {
   }
 
   return rawExtra ? `${value}\n${rawExtra}` : value;
+}
+
+function buildAdminPurchaseEntryText(rowOrEntry) {
+  if (!rowOrEntry) return '';
+
+  if (typeof rowOrEntry === 'string') {
+    return String(rowOrEntry).trim();
+  }
+
+  const value = String(rowOrEntry.value || '').trim();
+  const rawExtra = String(rowOrEntry.extra || '').trim();
+  const parsed = parseStructuredStockExtra(rawExtra);
+  const looksLikeAccount = Boolean(value.includes('@') || rawExtra.startsWith('{') || parsed.verify || parsed.note);
+
+  if (looksLikeAccount && (parsed.password || rawExtra)) {
+    const lines = [
+      `ايميل: ${value}`,
+      `باسورد: ${parsed.password || rawExtra}`
+    ];
+    if (parsed.verify) lines.push(`رابط المصادقة: ${parsed.verify}`);
+    if (parsed.note) lines.push(`ملاحظة: ${parsed.note}`);
+    return lines.join('\n');
+  }
+
+  if (rawExtra) {
+    return `الكود:\n${value}\n${rawExtra}`;
+  }
+
+  return `الكود: ${value}`;
+}
+
+function formatAdminDeliveredItemsText(items, maxLength = 2800) {
+  const normalized = (Array.isArray(items) ? items : [items])
+    .map(item => buildAdminPurchaseEntryText(item))
+    .filter(Boolean);
+
+  if (!normalized.length) return '';
+
+  const sections = [];
+  let totalLength = 0;
+
+  for (let i = 0; i < normalized.length; i += 1) {
+    const block = `#${i + 1}\n${normalized[i]}`;
+    const extraLength = (sections.length ? 2 : 0) + block.length;
+
+    if (totalLength + extraLength > maxLength) {
+      const remaining = normalized.length - i;
+      if (remaining > 0) sections.push(`... وباقي ${remaining} عنصر`);
+      break;
+    }
+
+    sections.push(block);
+    totalLength += extraLength;
+  }
+
+  return sections.join('\n\n');
 }
 
 function parseBulkStockPipeLine(line) {
@@ -4177,7 +3619,9 @@ async function completeAssistantMerchantPurchase(userId, merchantId, quantity = 
       sourceKey: 'balance',
       serviceType: `${merchant.nameAr || merchant.nameEn}`,
       codesCount: quantity,
-      remainingStockText: String(remainingMerchantStock)
+      remainingStockText: String(remainingMerchantStock),
+      deliveredItems: result.rawEntries || [],
+      totalCost: result.totalCost
     });
     await awardReferralRewardForMerchantPurchase(userId, result.totalCost || (merchant.price * quantity));
     return { success: true };
@@ -4812,32 +4256,55 @@ async function sendAdminCodeActionNotice(userId, options = {}) {
       codesCount = 1,
       usedPoints = 0,
       remainingStockText = 'من الموقع',
-      extraCodeCount = null
+      extraCodeCount = null,
+      deliveredItems = null,
+      totalCost = null
     } = options;
 
     const user = await User.findByPk(userId);
     const identity = await getTelegramIdentityById(userId);
     const referrals = await getSuccessfulReferralCount(userId);
     const sourceLabel = await getAdminCodeSourceLabel(userId, sourceKey, usedPoints);
+    const deliveredItemsText = formatAdminDeliveredItemsText(deliveredItems);
 
     const now = new Date();
     const dateText = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const timeText = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
 
     const message =
-      `📢 ${sourceKey === 'balance' ? 'شخص اشترى كود' : 'شخص سحب/استبدل كود'}\n\n` +
-      `الاسم: ${identity.fullName}\n` +
-      `المعرف: ${identity.usernameText}\n` +
-      `الايدي: ${userId}\n` +
-      `الرصيد: ${Number(user?.balance || 0).toFixed(2)}\n` +
-      `عدد نقاطه: ${Number(user?.referralPoints || 0)}\n` +
-      `كم كود سحب: ${extraCodeCount ?? codesCount}\n` +
-      `كم عدد الدعوات: ${referrals}\n` +
-      `نوع الخدمة: ${serviceType}\n` +
-      `مصدر الكود: ${sourceLabel}\n` +
-      `الساعة: ${timeText}\n` +
-      `التاريخ: ${dateText}\n\n` +
-      `كم تبقى بالمخزون: ${remainingStockText}`;
+      `📢 ${sourceKey === 'balance' ? 'شخص اشترى من البوت' : 'شخص سحب/استبدل كود'}
+
+` +
+      `الاسم: ${identity.fullName}
+` +
+      `المعرف: ${identity.usernameText}
+` +
+      `الايدي: ${userId}
+` +
+      `الرصيد: ${Number(user?.balance || 0).toFixed(2)}
+` +
+      `عدد نقاطه: ${Number(user?.referralPoints || 0)}
+` +
+      `الكمية: ${extraCodeCount ?? codesCount}
+` +
+      `كم عدد الدعوات: ${referrals}
+` +
+      `نوع الخدمة: ${serviceType}
+` +
+      `${totalCost !== null && totalCost !== undefined ? `المبلغ المدفوع: ${Number(totalCost).toFixed(2)}
+` : ''}` +
+      `مصدر الكود: ${sourceLabel}
+` +
+      `الساعة: ${timeText}
+` +
+      `التاريخ: ${dateText}
+
+` +
+      `كم تبقى بالمخزون: ${remainingStockText}` +
+      `${deliveredItemsText ? `
+
+📦 الذي تم تسليمه:
+${deliveredItemsText}` : ''}`;
 
     await bot.sendMessage(ADMIN_ID, message).catch(() => {});
   } catch (err) {
@@ -12755,7 +12222,9 @@ bot.on('message', async msg => {
           sourceKey: 'balance',
           serviceType: `${merchant.nameAr || merchant.nameEn}`,
           codesCount: qty,
-          remainingStockText: String(remainingMerchantStock)
+          remainingStockText: String(remainingMerchantStock),
+          deliveredItems: result.rawEntries || [],
+          totalCost: result.totalCost
         });
 
         const userObj = await User.findByPk(userId);
@@ -12850,7 +12319,9 @@ bot.on('message', async msg => {
                   sourceKey: 'balance',
                   serviceType: 'ChatGPT GO',
                   codesCount: deliveredCodes.length,
-                  remainingStockText: String(remainingFallback)
+                  remainingStockText: String(remainingFallback),
+                  deliveredItems: deliveredCodes,
+                  totalCost
                 });
               }
             } catch (err) {
@@ -13097,7 +12568,9 @@ bot.on('message', async msg => {
           sourceKey: 'balance',
           serviceType: 'ChatGPT GO',
           codesCount: Array.isArray(result.codes) ? result.codes.length : result.quantity,
-          remainingStockText: 'من الموقع'
+          remainingStockText: 'من الموقع',
+          deliveredItems: result.codes,
+          totalCost: result.totalCost
         });
       } else if (result.reason === 'INSUFFICIENT_BALANCE') {
         const freshUser = await User.findByPk(userId);
@@ -13214,7 +12687,9 @@ bot.on('message', async msg => {
                   sourceKey: 'balance',
                   serviceType: 'ChatGPT GO',
                   codesCount: deliveredCodes.length,
-                  remainingStockText: String(remainingFallback)
+                  remainingStockText: String(remainingFallback),
+                  deliveredItems: deliveredCodes,
+                  totalCost
                 });
               }
             } catch (err) {
